@@ -21,7 +21,11 @@ from qiskit.circuit.library import RZZGate
 
 from pqfmlib.core.base import BaseProjectiveQFM
 from pqfmlib.core.data import mutual_information_matrix
-from pqfmlib.core.execution import run_projected_feature_job
+from pqfmlib.core.execution import (
+    execute_prepared_projected_feature_job,
+    prepare_projected_feature_job,
+    run_projected_feature_job,
+)
 from pqfmlib.core.observables import pauli_observables_axis_pairs
 from pqfmlib.core.serialization import (
     blocks_from_jsonable,
@@ -464,6 +468,171 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
         self.obs_metadata = None
         self.Xq_all_raw = None
         self.job_id = None
+        self._prepared_execution = None
+
+    def _transform_config_signature(self) -> tuple:
+        """Return configuration that must remain unchanged after fit."""
+        return (
+            "XYZProjectiveQFM",
+            int(self.seed),
+            bool(self.simulation),
+            bool(self.fakebackend),
+            bool(self.ideal),
+            int(self.shots),
+            str(self.ibm_qpu),
+            int(self.q_enc),
+            bool(self.mps),
+            bool(self.use_gpu_statevector),
+            self.statevector_device,
+            self.mps_max_bond_dimension,
+            float(self.mps_truncation_threshold),
+            str(self.fakebackend_method),
+            str(self.fakebackend_device),
+            int(self.resilience_level),
+            bool(self.use_fixed_blocks),
+            str(self.fixed_blocks_file),
+            bool(self.use_fixed_phys_nodes),
+            str(self.fixed_phys_nodes_file),
+            str(self.fixed_circuit_file_name),
+            bool(self.use_edge_error),
+            int(self.features_per_qubit),
+            tuple(self.axes),
+            str(self.encoding_mode),
+            int(self.m),
+            float(self.tau),
+            bool(self.keep_diagonal_terms),
+            bool(self.keep_cross_terms),
+            self.n_keep_terms,
+            bool(self.measure_all_zz),
+            bool(self.measure_cross_observables),
+            float(self.rho_thr),
+            str(self.remaining_policy),
+        )
+
+    def _reset_fitted_map_state(self) -> None:
+        self.J = None
+        self.blocks_feat = None
+        self.blocks = None
+        self.edges_log = None
+        self.edges_act = None
+        self.edge_weight = None
+        self.phys_nodes = None
+        self.obs_metadata = None
+        self.Xq_all_raw = None
+        self.job_id = None
+        self._prepared_execution = None
+
+    def _validate_fitted_feature_indices(self) -> None:
+        active_edges = {(min(i, j), max(i, j)) for i, j in self.edges_log}
+        for block_id, block in enumerate(self.blocks):
+            for axis in self.axes:
+                for feature_id in block["feat_ids_by_axis"][axis]:
+                    feature_id = int(feature_id)
+                    if feature_id < -1 or feature_id >= self.n_features_in_:
+                        raise ValueError(
+                            f"Block {block_id}, axis {axis}, contains invalid feature index {feature_id}."
+                        )
+            invalid_terms = [
+                term
+                for term in block.get("J_terms", {})
+                if term[0] not in self.axes
+                or term[1] not in self.axes
+                or (min(term[2], term[3]), max(term[2], term[3])) not in active_edges
+            ]
+            if invalid_terms:
+                raise ValueError(f"Block {block_id} contains interactions outside the fitted XYZ layout.")
+
+    def _build_circuit_and_observables(self, *, m_total: int | None = None):
+        if m_total is None:
+            m_total = int(self.m) * len(self.blocks)
+        qc_param, param_order, _circuit_info = build_full_cross_hamiltonian_circuit_param(
+            self.q_enc,
+            self.edges_act,
+            features_per_qubit=len(self.axes),
+            axes=self.axes,
+            m=m_total,
+            keep_diagonal_terms=self.keep_diagonal_terms,
+            keep_cross_terms=self.keep_cross_terms,
+        )
+        obs_list, obs_metadata = pauli_observables_axis_pairs(
+            self.q_enc,
+            axes=self.axes,
+            edges_act=self._observable_edges(),
+            measure_cross_observables=self.measure_cross_observables,
+        )
+        return qc_param, param_order, obs_list, obs_metadata
+
+    def _prepare_fitted_execution(self) -> None:
+        qc_param, param_order, obs_list, obs_metadata = self._build_circuit_and_observables()
+        self._prepared_execution = prepare_projected_feature_job(
+            qc_param,
+            param_order,
+            self.phys_nodes,
+            self.backend,
+            obs_list,
+            obs_metadata,
+            simulation=True,
+            fakebackend=self.fakebackend,
+            base_folder=self.base_folder,
+            fixed_circuit=self.fixed_circuit_file_name,
+            seed_transpiler=self.seed,
+            qpy_filename="xyz_circuit.qpy",
+            save_circuit_drawings=self.save_circuit_drawings,
+            use_fixed_circuit_in_simulation=True,
+            validate_parameter_compatibility=True,
+        )
+        self.obs_metadata = obs_metadata
+
+    def fit(self, X, y=None):
+        """Learn XYZ interactions and prepare a frozen simulation state."""
+        if not self.simulation:
+            raise NotImplementedError("fit()/transform() currently support only simulation=True.")
+
+        X_fit = self._prepare_fit_input(X)
+        self._reset_fitted_map_state()
+        self.num_features = self.n_features_in_
+        self.X_q_all = X_fit
+        try:
+            self.setup_backend_and_estimator()
+            self.prepare_output_folder()
+            self.compute_global_J_and_feature_blocks()
+            self.prepare_blocks_and_edges()
+            self._validate_fitted_feature_indices()
+            self._prepare_fitted_execution()
+        finally:
+            self.X_q_all = None
+        self._mark_fitted(self._transform_config_signature())
+        return self
+
+    def transform(self, X) -> np.ndarray:
+        """Apply the fitted XYZ map without relearning train state."""
+        X_transform = self._prepare_transform_input(X, self._transform_config_signature())
+        theta_values_all, _m_total = make_theta_matrix_full_cross_blocks(
+            X_transform,
+            self.blocks,
+            self.edges_log,
+            features_per_qubit=len(self.axes),
+            axes=self.axes,
+            encoding_mode=self.encoding_mode,
+            tau=self.tau,
+            m_phys=self.m,
+            keep_diagonal_terms=self.keep_diagonal_terms,
+            keep_cross_terms=self.keep_cross_terms,
+        )
+        Xq, _obs_metadata = execute_prepared_projected_feature_job(
+            self._prepared_execution,
+            theta_values_all,
+            self.backend,
+            self.estimator,
+            simulation=True,
+            shots=self.shots,
+            base_folder=self.base_folder,
+        )
+        return Xq
+
+    def fit_transform(self, X, y=None) -> np.ndarray:
+        """Fit the XYZ map and transform the training matrix."""
+        return self.fit(X, y=y).transform(X)
 
     def _block_capacity(self) -> int:
         return self.q_enc if self.encoding_mode == "shared_feature" else self.q_enc * len(self.axes)
@@ -631,21 +800,8 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
             keep_diagonal_terms=self.keep_diagonal_terms,
             keep_cross_terms=self.keep_cross_terms,
         )
-        qc_param, param_order, _ = build_full_cross_hamiltonian_circuit_param(
-            self.q_enc,
-            self.edges_act,
-            features_per_qubit=len(self.axes),
-            axes=self.axes,
-            m=m_total,
-            keep_diagonal_terms=self.keep_diagonal_terms,
-            keep_cross_terms=self.keep_cross_terms,
-        )
-        observable_edges = self._observable_edges()
-        obs_list, obs_metadata = pauli_observables_axis_pairs(
-            self.q_enc,
-            axes=self.axes,
-            edges_act=observable_edges,
-            measure_cross_observables=self.measure_cross_observables,
+        qc_param, param_order, obs_list, obs_metadata = self._build_circuit_and_observables(
+            m_total=m_total
         )
         metadata_extra = {
             "q_enc": int(self.q_enc),

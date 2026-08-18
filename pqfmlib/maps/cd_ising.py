@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
@@ -16,7 +17,11 @@ from qiskit.circuit.library import RZZGate
 
 from pqfmlib.core.base import BaseProjectiveQFM
 from pqfmlib.core.data import mutual_information_matrix
-from pqfmlib.core.execution import run_projected_feature_job
+from pqfmlib.core.execution import (
+    execute_prepared_projected_feature_job,
+    prepare_projected_feature_job,
+    run_projected_feature_job,
+)
 from pqfmlib.core.observables import z_observables, z_observables_edges
 from pqfmlib.core.serialization import blocks_from_jsonable, blocks_to_jsonable
 from pqfmlib.hardware import feature_assignment as GA
@@ -225,8 +230,169 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
         self.edges_act = None
         self.phys_nodes = None
         self.pairs_2q = None
+        self.obs_metadata = None
         self.Xq_all_raw = None
         self.job_id = None
+        self._prepared_execution = None
+
+    def _transform_config_signature(self) -> tuple:
+        """Return configuration that must remain unchanged after fit."""
+        return (
+            "CDIsingProjectiveQFM",
+            int(self.seed),
+            bool(self.simulation),
+            bool(self.fakebackend),
+            bool(self.ideal),
+            int(self.shots),
+            str(self.ibm_qpu),
+            int(self.q_enc),
+            bool(self.mps),
+            bool(self.use_gpu_statevector),
+            self.statevector_device,
+            self.mps_max_bond_dimension,
+            float(self.mps_truncation_threshold),
+            str(self.fakebackend_method),
+            str(self.fakebackend_device),
+            int(self.resilience_level),
+            bool(self.use_fixed_blocks),
+            str(self.fixed_blocks_file),
+            bool(self.use_fixed_phys_nodes),
+            str(self.fixed_phys_nodes_file),
+            str(self.fixed_circuit_file_name),
+            bool(self.use_edge_error),
+            int(self.m),
+            float(self.rho_thr),
+            int(self.k_max),
+            float(self.tau),
+            bool(self.measure_all_zz),
+        )
+
+    def _reset_fitted_map_state(self) -> None:
+        self.J = None
+        self.blocks_feat = None
+        self.blocks = None
+        self.edges_log = None
+        self.edges_act = None
+        self.phys_nodes = None
+        self.pairs_2q = None
+        self.obs_metadata = None
+        self._prepared_execution = None
+        self.Xq_all_raw = None
+        self.job_id = None
+
+    def _validate_fitted_blocks_consistency(self) -> None:
+        if not self.blocks:
+            raise ValueError("CD-Ising requires at least one feature block.")
+
+        feature_ids = []
+        active_edges = {(min(i, j), max(i, j)) for i, j in self.edges_log}
+        for block_id, block in enumerate(self.blocks):
+            ids = block.get("feat_ids")
+            if ids is None or len(ids) != self.q_enc:
+                raise ValueError(f"Block {block_id} must contain exactly q_enc={self.q_enc} feature slots.")
+            for feature_id in ids:
+                feature_id = int(feature_id)
+                if feature_id < -1 or feature_id >= self.n_features_in_:
+                    raise ValueError(f"Block {block_id} contains invalid feature index {feature_id}.")
+                if feature_id >= 0:
+                    feature_ids.append(feature_id)
+            invalid_edges = [
+                edge
+                for edge in block.get("J_dict_layer", {})
+                if (min(edge[0], edge[1]), max(edge[0], edge[1])) not in active_edges
+            ]
+            if invalid_edges:
+                raise ValueError(f"Block {block_id} contains interactions outside the active layout: {invalid_edges[:5]}")
+
+        counts = Counter(feature_ids)
+        duplicates = [feature_id for feature_id, count in counts.items() if count > 1]
+        if duplicates:
+            raise ValueError(f"CD-Ising blocks contain repeated features: {duplicates[:10]}")
+        missing = sorted(set(range(self.n_features_in_)) - set(feature_ids))
+        if missing:
+            raise ValueError(f"CD-Ising blocks do not cover all fitted features. Missing examples: {missing[:10]}")
+
+    def _build_circuit_and_observables(self, *, m_total: int | None = None):
+        if m_total is None:
+            m_total = int(self.m) * len(self.blocks)
+        qc_param, param_order = build_quench_circuit_param(self.q_enc, self.edges_act, m=m_total)
+        if self.measure_all_zz:
+            obs_list, pairs_2q = z_observables(self.q_enc, k_max=self.k_max)
+        else:
+            obs_list, pairs_2q = z_observables_edges(self.q_enc, self.edges_act)
+        obs_metadata = [("z", i) for i in range(self.q_enc)] + [("zz", i, j) for i, j in pairs_2q]
+        return qc_param, param_order, obs_list, obs_metadata, pairs_2q
+
+    def _prepare_fitted_execution(self) -> None:
+        qc_param, param_order, obs_list, obs_metadata, pairs_2q = self._build_circuit_and_observables()
+        self._prepared_execution = prepare_projected_feature_job(
+            qc_param,
+            param_order,
+            self.phys_nodes,
+            self.backend,
+            obs_list,
+            obs_metadata,
+            simulation=True,
+            fakebackend=self.fakebackend,
+            base_folder=self.base_folder,
+            fixed_circuit=self.fixed_circuit_file_name,
+            seed_transpiler=self.seed,
+            qpy_filename="cd_ising_circuit.qpy",
+            save_circuit_drawings=self.save_circuit_drawings,
+            use_fixed_circuit_in_simulation=True,
+            validate_parameter_compatibility=True,
+        )
+        self.pairs_2q = pairs_2q
+        self.obs_metadata = obs_metadata
+
+    def fit(self, X, y=None):
+        """Learn CD-Ising interactions and prepare a frozen simulation state."""
+        if not self.simulation:
+            raise NotImplementedError("fit()/transform() currently support only simulation=True.")
+
+        X_fit = self._prepare_fit_input(X)
+        self._reset_fitted_map_state()
+        self.num_features = self.n_features_in_
+        self.X_q_all = X_fit
+        try:
+            self.setup_backend_and_estimator()
+            self.prepare_output_folder()
+            self.compute_global_J_and_feature_blocks()
+            self.prepare_blocks_and_edges()
+            self._validate_fitted_blocks_consistency()
+            self._prepare_fitted_execution()
+        finally:
+            self.X_q_all = None
+        self._mark_fitted(self._transform_config_signature())
+        return self
+
+    def transform(self, X) -> np.ndarray:
+        """Apply the fitted CD-Ising map without relearning train state."""
+        X_transform = self._prepare_transform_input(X, self._transform_config_signature())
+        theta_values_all, _m_total = make_theta_matrix_all_blocks_hw(
+            X_transform,
+            self.blocks,
+            self.edges_log,
+            self.tau,
+            self.m,
+            s_curve,
+            ds_curve,
+            makeAlpha1,
+        )
+        Xq, _obs_metadata = execute_prepared_projected_feature_job(
+            self._prepared_execution,
+            theta_values_all,
+            self.backend,
+            self.estimator,
+            simulation=True,
+            shots=self.shots,
+            base_folder=self.base_folder,
+        )
+        return Xq
+
+    def fit_transform(self, X, y=None) -> np.ndarray:
+        """Fit the CD-Ising map and transform the training matrix."""
+        return self.fit(X, y=y).transform(X)
 
     def prepare_output_folder(self) -> None:
         parts = ["quantum_features", "CDIsing", self.name_file, f"k_max{self.k_max}", str(self.num_features), str(self.q_enc)]
@@ -311,12 +477,9 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
             ds_curve,
             makeAlpha1,
         )
-        qc_param, param_order = build_quench_circuit_param(self.q_enc, self.edges_act, m=m_total)
-        if self.measure_all_zz:
-            obs_list, pairs_2q = z_observables(self.q_enc, k_max=self.k_max)
-        else:
-            obs_list, pairs_2q = z_observables_edges(self.q_enc, self.edges_act)
-        obs_metadata = [("z", i) for i in range(self.q_enc)] + [("zz", i, j) for i, j in pairs_2q]
+        qc_param, param_order, obs_list, obs_metadata, pairs_2q = self._build_circuit_and_observables(
+            m_total=m_total
+        )
         metadata_extra = {"q_enc": int(self.q_enc), "pairs_2q": [list(p) for p in pairs_2q]}
         result = run_projected_feature_job(
             qc_param,

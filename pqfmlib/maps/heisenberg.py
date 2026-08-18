@@ -15,7 +15,13 @@ from qiskit.transpiler import Layout
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
 from pqfmlib.core.base import BaseProjectiveQFM
-from pqfmlib.core.execution import reorder_theta_by_parameter_names, submit_job_and_save_metadata
+from pqfmlib.core.execution import (
+    PreparedProjectedFeatureJob,
+    execute_prepared_projected_feature_job,
+    reorder_theta_by_parameter_names,
+    submit_job_and_save_metadata,
+    validate_circuit_parameter_compatibility,
+)
 from pqfmlib.core.resources import test_circuit_t
 from pqfmlib.core.serialization import metadata_to_column_name
 from pqfmlib.hardware.coupling import get_coupling_edges_and_costs
@@ -245,6 +251,139 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
         self.job_id = None
         self.theta_info = None
         self.circuit_info = None
+        self._prepared_execution = None
+
+    def _transform_config_signature(self) -> tuple:
+        """Return configuration that must remain unchanged after fit."""
+        return (
+            "HeisenbergProjectiveQFM",
+            int(self.seed),
+            bool(self.simulation),
+            bool(self.fakebackend),
+            bool(self.ideal),
+            int(self.shots),
+            str(self.ibm_qpu),
+            int(self.q_enc),
+            bool(self.mps),
+            bool(self.use_gpu_statevector),
+            self.statevector_device,
+            self.mps_max_bond_dimension,
+            float(self.mps_truncation_threshold),
+            str(self.fakebackend_method),
+            str(self.fakebackend_device),
+            int(self.resilience_level),
+            int(self.R),
+            float(self.alpha),
+            bool(self.use_tanh_scaling),
+            bool(self.add_barriers),
+            bool(self.use_fixed_phys_nodes),
+            str(self.fixed_phys_nodes_file),
+            str(self.fixed_circuit_file_name),
+            tuple(self.axes),
+            bool(self.measure_2local_diagonal),
+        )
+
+    def _reset_fitted_map_state(self) -> None:
+        self.phys_nodes = None
+        self.obs_metadata = None
+        self.Xq_all_raw = None
+        self.job_id = None
+        self.theta_info = None
+        self.circuit_info = None
+        self._prepared_execution = None
+
+    def _build_circuit_and_observables(self):
+        qc_param, param_order, self.circuit_info = build_heisenberg_chain_feature_circuit(
+            self.q_enc,
+            num_blocks=self.theta_info["num_blocks"],
+            features_per_block=self.theta_info["features_per_block"],
+            R=self.R,
+            alpha=self.alpha,
+            seed=self.seed,
+            add_barriers=self.add_barriers,
+        )
+        obs_list, obs_metadata = heisenberg_chain_observables(
+            self.q_enc,
+            measure_2local_diagonal=self.measure_2local_diagonal,
+        )
+        return qc_param, param_order, obs_list, obs_metadata
+
+    def _prepare_fitted_execution(self) -> None:
+        qc_param, param_order, obs_list, obs_metadata = self._build_circuit_and_observables()
+        qc_t = self._transpile_or_load_circuit(qc_param)
+        validate_circuit_parameter_compatibility(qc_t, param_order)
+        if (self.fakebackend or self.fixed_circuit_file_name) and self.phys_nodes is None:
+            extracted = _extract_initial_phys_nodes(qc_t, qc_param)
+            if extracted is not None:
+                self.phys_nodes = extracted
+                save_json(self.phys_nodes, Path(self.base_folder) / "phys_nodes.json")
+        has_fixed_layout = bool(self.fixed_circuit_file_name) and getattr(qc_t, "layout", None) is not None
+        if self.fakebackend or has_fixed_layout:
+            obs_isa = [obs.apply_layout(qc_t.layout) for obs in obs_list]
+        else:
+            obs_isa = obs_list
+        self._prepared_execution = PreparedProjectedFeatureJob(
+            qc_t=qc_t,
+            param_order=tuple(param_order),
+            obs_isa_broadcast=[[obs] for obs in obs_isa],
+            obs_metadata=obs_metadata,
+            fixed_circuit_loaded=bool(self.fixed_circuit_file_name),
+        )
+        self.obs_metadata = obs_metadata
+
+    def fit(self, X, y=None):
+        """Prepare the train-dimensional Heisenberg simulation state."""
+        if not self.simulation:
+            raise NotImplementedError("fit()/transform() currently support only simulation=True.")
+
+        self._prepare_fit_input(X)
+        self._reset_fitted_map_state()
+        self.num_features = self.n_features_in_
+        _unused_theta, self.theta_info = make_heisenberg_theta_matrix(
+            np.zeros((1, self.n_features_in_), dtype=float),
+            self.q_enc,
+            features_per_block=self.q_enc - 1,
+            use_tanh_scaling=self.use_tanh_scaling,
+        )
+        self.setup_backend_and_estimator()
+        self.prepare_output_folder()
+        self.prepare_layout()
+        self._prepare_fitted_execution()
+        self._mark_fitted(self._transform_config_signature())
+        return self
+
+    def transform(self, X) -> np.ndarray:
+        """Apply the fitted Heisenberg map without changing its structure."""
+        X_transform = self._prepare_transform_input(X, self._transform_config_signature())
+        theta_values_all, theta_info = make_heisenberg_theta_matrix(
+            X_transform,
+            self.q_enc,
+            features_per_block=self.theta_info["features_per_block"],
+            use_tanh_scaling=self.use_tanh_scaling,
+        )
+        structural_keys = (
+            "num_features",
+            "features_per_block",
+            "num_blocks",
+            "total_slots",
+            "use_tanh_scaling",
+        )
+        if any(theta_info[key] != self.theta_info[key] for key in structural_keys):
+            raise RuntimeError("Heisenberg transform structure differs from the fitted state.")
+        Xq, _obs_metadata = execute_prepared_projected_feature_job(
+            self._prepared_execution,
+            theta_values_all,
+            self.backend,
+            self.estimator,
+            simulation=True,
+            shots=self.shots,
+            base_folder=self.base_folder,
+        )
+        return Xq
+
+    def fit_transform(self, X, y=None) -> np.ndarray:
+        """Fit the Heisenberg map and transform the training matrix."""
+        return self.fit(X, y=y).transform(X)
 
     def prepare_output_folder(self) -> None:
         features_per_block = int(self.q_enc) - 1
@@ -356,15 +495,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             use_tanh_scaling=self.use_tanh_scaling,
         )
 
-        qc_param, param_order, self.circuit_info = build_heisenberg_chain_feature_circuit(
-            self.q_enc,
-            num_blocks=self.theta_info["num_blocks"],
-            features_per_block=self.theta_info["features_per_block"],
-            R=self.R,
-            alpha=self.alpha,
-            seed=self.seed,
-            add_barriers=self.add_barriers,
-        )
+        qc_param, param_order, obs_list, obs_metadata = self._build_circuit_and_observables()
 
         qc_t = self._transpile_or_load_circuit(qc_param)
 
@@ -379,11 +510,6 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             )
             if self.resource_estimation:
                 return None
-
-        obs_list, obs_metadata = heisenberg_chain_observables(
-            self.q_enc,
-            measure_2local_diagonal=self.measure_2local_diagonal,
-        )
 
         if not self.simulation or self.fakebackend:
             obs_isa = [obs.apply_layout(qc_t.layout) for obs in obs_list]

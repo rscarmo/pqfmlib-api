@@ -90,6 +90,73 @@ print(result["csv_path"])
 Runnable examples using the `Toxicity_preprocessed_shuffled` dataset are
 available in `examples/`.
 
+## Transformer API
+
+All three maps also support an in-memory transformer workflow for simulations:
+
+```python
+from pqfmlib import XYZProjectiveQFM
+
+qfm = XYZProjectiveQFM(
+    name_file="cross_validation",
+    output_root="./results",
+    simulation=True,
+    ideal=True,
+    q_enc=4,
+    features_per_qubit=2,
+    axes=("x", "y"),
+)
+
+qfm.fit(X_train)
+Xq_train = qfm.transform(X_train)
+Xq_val = qfm.transform(X_val)
+Xq_test = qfm.transform(X_test)
+```
+
+`fit_transform(X_train)` is equivalent to `fit(X_train)` followed by
+`transform(X_train)`:
+
+```python
+Xq_train = qfm.fit_transform(X_train)
+```
+
+The transformer API follows these rules:
+
+- `fit(X, y=None)` returns the fitted map. The optional `y` is accepted for
+  scikit-learn-style composition but is not used by the quantum feature maps.
+- `transform(X)` returns a NumPy feature matrix and does not save CSV or NPY
+  feature files. `fit()` may still save structural artifacts such as blocks or
+  physical nodes through the existing reproducibility mechanisms.
+- The number of input features must match the training matrix. When training
+  uses a pandas DataFrame, later DataFrames must use the same columns in the
+  same order.
+- Circuit-affecting configuration is frozen by `fit()`. Change the
+  configuration and call `fit()` again instead of transforming with a circuit
+  built for different settings.
+- The transformer API currently requires `simulation=True`. Real-QPU
+  submission remains available through the backward-compatible `run()` API.
+
+For CD-Ising and XYZ, `fit()` computes mutual information, feature blocks,
+feature assignment, interactions, physical nodes, and circuit structure using
+only `X_train`. Validation and test matrices never recompute those quantities.
+Their values are used only to construct the parameter matrix for their own
+`transform()` call.
+
+Heisenberg does not use mutual information. Its `fit()` freezes only the state
+that depends on the training feature dimension, including the number of
+blocks, parameter slots, interaction scale, layout, circuit, and observables.
+Each `transform(X)` applies the existing scaling and padding to the values in
+that specific `X`.
+
+The legacy file-based workflow is unchanged:
+
+```python
+result = qfm.run()
+```
+
+It still loads `<data_dir>/<name_file>.csv`, treats the last column as the
+target, saves feature artifacts, and preserves real-QPU submission behavior.
+
 ## Execution Modes
 
 PQFMLib separates the execution mode from the hardware topology used to build
@@ -109,6 +176,39 @@ the feature map:
 - `ideal=False` and `simulation=False`: submits the job to the selected IBM
   Quantum backend through Runtime.
 
+For `ideal=False` transformer fits, the physical subgraph, logical edges,
+feature assignment, and prepared circuit are selected once and reused by every
+`transform()` call. In CD-Ising and XYZ, physical-node selection is a greedy
+low-error step; the genetic algorithm then assigns features to logical slots
+on that selected subgraph. With `use_edge_error=True`, its fitness combines
+mutual information with physical-edge quality.
+
+When `fakebackend=False`, the simulator executes the logical circuit, while its
+available interaction edges and feature assignment still come from the chosen
+QPU topology. With `fakebackend=True`, the prepared circuit is also transpiled
+against the backend-derived Aer target, and the resulting layout is reused.
+
+### Fixed fitted state
+
+The existing reproducibility options can initialize transformer state:
+
+- `use_fixed_blocks=True` loads the saved feature assignment and embedded
+  interactions instead of recomputing mutual information.
+- `use_fixed_phys_nodes=True` loads and validates the saved physical nodes.
+- `fixed_circuit_file_name` loads a QPY circuit during `fit()` and reuses that
+  same circuit for every `transform()` call.
+
+For full reproduction of a hardware-aware fitted state, combine fixed blocks,
+fixed physical nodes, and a fixed circuit. Any component not fixed explicitly
+is selected again during the next `fit()`.
+
+Fixed QPY circuits must expose exactly the parameter names expected by the map
+configuration fitted from the training feature dimension. An incompatible
+circuit is rejected during `fit()` rather than failing during a later
+transformation. This validates the parameter interface; users remain
+responsible for supplying a circuit produced for the intended Hamiltonian and
+backend configuration.
+
 ## Hamiltonian Maps
 
 ### CD-Ising PQFM
@@ -119,8 +219,8 @@ encoding per qubit by increasing the circuit depth. Each circuit block, or
 layer, encodes one feature per qubit, allowing multiple features to be assigned
 sequentially to the same qubit across different layers.
 
-For each feature block, PQFMLib constructs data-dependent local fields $h_i$ 
-and couplings $J_{ij}$ from the input values and the mutual-information matrix. 
+For each feature block, PQFMLib constructs data-dependent local fields $h_i$
+and couplings $J_{ij}$ from the input values and the mutual-information matrix.
 The local fields are interpreted as normalized feature values.
 
 A useful way to view the underlying Ising problem Hamiltonian is:

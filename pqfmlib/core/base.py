@@ -61,6 +61,71 @@ class BaseProjectiveQFM:
         self.X_q_all = None
         self.num_features = None
         self.base_folder = None
+        self._is_fitted = False
+        self.n_features_in_: int | None = None
+        self.feature_names_in_: np.ndarray | None = None
+        self._feature_names_in_signature: tuple[object, ...] | None = None
+        self._fitted_config_signature: tuple | None = None
+
+    @staticmethod
+    def _coerce_feature_matrix(X) -> tuple[np.ndarray, tuple[object, ...] | None]:
+        """Return a finite 2D float matrix and optional DataFrame column names."""
+        feature_names = None
+        if isinstance(X, pd.DataFrame):
+            non_numeric = X.columns[~X.apply(lambda s: pd.api.types.is_numeric_dtype(s))]
+            if len(non_numeric) > 0:
+                raise ValueError(f"X must contain only numeric columns. Non-numeric columns: {list(non_numeric)}")
+            feature_names = tuple(X.columns)
+            values = X.to_numpy(dtype=float, copy=True)
+        else:
+            try:
+                values = np.asarray(X, dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("X must be convertible to a numeric matrix.") from exc
+            values = np.array(values, dtype=float, copy=True)
+
+        if values.ndim != 2:
+            raise ValueError(f"X must be a 2D matrix, but got {values.ndim} dimensions.")
+        if values.shape[0] == 0:
+            raise ValueError("X must contain at least one sample.")
+        if values.shape[1] == 0:
+            raise ValueError("X must contain at least one feature.")
+        if not np.isfinite(values).all():
+            raise ValueError("X must contain only finite values.")
+        return values, feature_names
+
+    def _prepare_fit_input(self, X) -> np.ndarray:
+        """Validate training input and reset the internal fitted lifecycle."""
+        values, feature_names = self._coerce_feature_matrix(X)
+        self._is_fitted = False
+        self.n_features_in_ = int(values.shape[1])
+        self._feature_names_in_signature = feature_names
+        self.feature_names_in_ = None if feature_names is None else np.asarray(feature_names, dtype=object)
+        self._fitted_config_signature = None
+        return values
+
+    def _mark_fitted(self, config_signature: tuple) -> None:
+        """Mark preparation as complete and freeze its structural signature."""
+        if self.n_features_in_ is None:
+            raise RuntimeError("Training input must be prepared before marking the estimator as fitted.")
+        self._fitted_config_signature = tuple(config_signature)
+        self._is_fitted = True
+
+    def _prepare_transform_input(self, X, config_signature: tuple) -> np.ndarray:
+        """Validate transform input against the frozen training structure."""
+        if not self._is_fitted or self.n_features_in_ is None:
+            raise RuntimeError("This PQFM instance is not fitted yet. Call fit(X) before transform(X).")
+        if tuple(config_signature) != self._fitted_config_signature:
+            raise RuntimeError("Structural PQFM configuration changed after fit; call fit(X) again before transform(X).")
+
+        values, feature_names = self._coerce_feature_matrix(X)
+        if int(values.shape[1]) != self.n_features_in_:
+            raise ValueError(
+                f"X has {values.shape[1]} features, but this PQFM was fitted with {self.n_features_in_} features."
+            )
+        if self._feature_names_in_signature is not None and feature_names != self._feature_names_in_signature:
+            raise ValueError("DataFrame columns must match the names and order used during fit.")
+        return values
 
     def _validate_resource_estimation_mode(self) -> None:
         if self.ideal and bool(getattr(self, "resource_estimation", False)):

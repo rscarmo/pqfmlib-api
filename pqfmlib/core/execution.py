@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,34 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from pqfmlib.core.resources import test_circuit_t
 from pqfmlib.core.serialization import metadata_to_jsonable
 from pqfmlib.utils.io import save_circuit_draw
+
+
+@dataclass(frozen=True)
+class PreparedProjectedFeatureJob:
+    """Circuit and observables prepared independently from a transform batch."""
+
+    qc_t: object
+    param_order: tuple
+    obs_isa_broadcast: object
+    obs_metadata: object
+    fixed_circuit_loaded: bool = False
+
+
+def validate_circuit_parameter_compatibility(qc_t, param_order) -> None:
+    """Require a prepared circuit to expose exactly the expected parameters."""
+    expected_names = [parameter.name for parameter in param_order]
+    circuit_names = [parameter.name for parameter in qc_t.parameters]
+    if len(expected_names) != len(set(expected_names)):
+        raise ValueError("Parameter names in param_order are not unique.")
+    if len(circuit_names) != len(set(circuit_names)):
+        raise ValueError("Parameter names in the prepared circuit are not unique.")
+    missing = sorted(set(expected_names) - set(circuit_names))
+    unexpected = sorted(set(circuit_names) - set(expected_names))
+    if missing or unexpected:
+        raise ValueError(
+            "Prepared circuit parameters are incompatible with the fitted map. "
+            f"Missing from circuit: {missing[:10]}; unexpected in circuit: {unexpected[:10]}."
+        )
 
 
 def reorder_theta_by_parameter_names(qc_t, param_order, theta_values_all):
@@ -58,6 +87,143 @@ def submit_job_and_save_metadata(
     return job_id
 
 
+def prepare_projected_feature_job(
+    qc_param,
+    param_order,
+    phys_nodes,
+    backend,
+    obs_list,
+    obs_metadata,
+    *,
+    simulation: bool = False,
+    fakebackend: bool = False,
+    base_folder: str = "example",
+    fixed_circuit: str = "",
+    seed_transpiler: int = 42,
+    qpy_filename: str = "qfm_circuit.qpy",
+    save_circuit_drawings: bool = False,
+    use_fixed_circuit_in_simulation: bool = False,
+    validate_parameter_compatibility: bool = False,
+):
+    """Prepare the circuit, parameter order, and laid-out observables once."""
+    n = int(qc_param.num_qubits)
+    if phys_nodes is None:
+        phys_nodes = list(range(n))
+    if len(phys_nodes) != n:
+        raise ValueError(f"phys_nodes must have length {n}, but got {len(phys_nodes)}")
+
+    Path(base_folder).mkdir(parents=True, exist_ok=True)
+
+    fixed_circuit_loaded = bool(fixed_circuit) and (not simulation or use_fixed_circuit_in_simulation)
+    if fixed_circuit_loaded:
+        fixed_path = Path(fixed_circuit)
+        if fixed_path.suffix != ".qpy":
+            fixed_path = fixed_path.with_suffix(".qpy")
+        with open(fixed_path, "rb") as f:
+            qc_t = qpy.load(f)[0]
+    elif not simulation:
+        initial_layout = Layout({qc_param.qubits[i]: phys_nodes[i] for i in range(n)})
+        qc_t = transpile(
+            qc_param,
+            backend=backend,
+            initial_layout=initial_layout,
+            optimization_level=3,
+            seed_transpiler=seed_transpiler,
+            routing_method="none",
+        )
+        with open(Path(base_folder) / qpy_filename, "wb") as f:
+            qpy.dump(qc_t, f)
+    elif fakebackend:
+        initial_layout = Layout({qc_param.qubits[i]: phys_nodes[i] for i in range(n)})
+        qc_t = transpile(
+            qc_param,
+            backend=backend,
+            initial_layout=initial_layout,
+            optimization_level=3,
+            seed_transpiler=seed_transpiler,
+        )
+    else:
+        # Preserve the legacy pure-simulation behavior: fixed_circuit is ignored
+        # and the logical circuit is used without backend transpilation.
+        qc_t = qc_param.copy()
+
+    if validate_parameter_compatibility:
+        validate_circuit_parameter_compatibility(qc_t, param_order)
+
+    if save_circuit_drawings:
+        save_circuit_draw(qc_t, base_folder, "circuit_transpiled")
+        save_circuit_draw(qc_param, base_folder, "circuit_logical")
+
+    if fixed_circuit_loaded and simulation:
+        layout = getattr(qc_t, "layout", None)
+        obs_isa = [obs.apply_layout(layout) for obs in obs_list] if layout is not None else list(obs_list)
+    elif not simulation or fakebackend:
+        obs_isa = [obs.apply_layout(qc_t.layout) for obs in obs_list]
+    else:
+        obs_isa = list(obs_list)
+
+    return PreparedProjectedFeatureJob(
+        qc_t=qc_t,
+        param_order=tuple(param_order),
+        obs_isa_broadcast=[[obs] for obs in obs_isa],
+        obs_metadata=obs_metadata,
+        fixed_circuit_loaded=fixed_circuit_loaded,
+    )
+
+
+def execute_prepared_projected_feature_job(
+    prepared,
+    theta_values_all,
+    backend,
+    estimator,
+    *,
+    simulation: bool = False,
+    resource_estimation: bool = False,
+    shots: int = 1024,
+    base_folder: str = "example",
+    metadata_extra: dict | None = None,
+):
+    """Execute one parameter batch using an already prepared circuit."""
+    theta_values_all = np.asarray(theta_values_all)
+    if theta_values_all.ndim != 2:
+        raise ValueError("theta_values_all must be a 2D matrix.")
+    N = int(theta_values_all.shape[0])
+
+    if not simulation:
+        test_circuit_t(
+            prepared.qc_t,
+            backend,
+            resource_estimation,
+            csv_path=str(Path(base_folder) / "resource_estimation.csv"),
+            shots=shots,
+            num_param_sets=N,
+        )
+        if resource_estimation:
+            return None
+
+    theta_reordered = reorder_theta_by_parameter_names(
+        prepared.qc_t,
+        prepared.param_order,
+        theta_values_all,
+    )
+
+    if simulation:
+        job = estimator.run([(prepared.qc_t, prepared.obs_isa_broadcast, theta_reordered)])
+        result = job.result()[0]
+        evs = np.asarray(result.data.evs, dtype=float)
+        return evs.T, prepared.obs_metadata
+
+    return submit_job_and_save_metadata(
+        estimator,
+        prepared.qc_t,
+        prepared.obs_isa_broadcast,
+        theta_reordered,
+        prepared.obs_metadata,
+        base_folder=base_folder,
+        **(metadata_extra or {}),
+    )
+
+
 def run_projected_feature_job(
     qc_param,
     param_order,
@@ -80,88 +246,31 @@ def run_projected_feature_job(
     save_circuit_drawings: bool = False,
 ):
     """Run or submit a projected feature-map Estimator job."""
-    n = int(qc_param.num_qubits)
-    if phys_nodes is None:
-        phys_nodes = list(range(n))
-    if len(phys_nodes) != n:
-        raise ValueError(f"phys_nodes must have length {n}, but got {len(phys_nodes)}")
-
-    N = int(theta_values_all.shape[0])
-    if theta_values_all.ndim != 2:
+    if np.asarray(theta_values_all).ndim != 2:
         raise ValueError("theta_values_all must be a 2D matrix.")
-
-    Path(base_folder).mkdir(parents=True, exist_ok=True)
-
-    if not simulation:
-        if fixed_circuit == "":
-            initial_layout = Layout({qc_param.qubits[i]: phys_nodes[i] for i in range(n)})
-            qc_t = transpile(
-                qc_param,
-                backend=backend,
-                initial_layout=initial_layout,
-                optimization_level=3,
-                seed_transpiler=seed_transpiler,
-                routing_method="none",
-            )
-            with open(Path(base_folder) / qpy_filename, "wb") as f:
-                qpy.dump(qc_t, f)
-        else:
-            fixed_path = Path(fixed_circuit)
-            if fixed_path.suffix != ".qpy":
-                fixed_path = fixed_path.with_suffix(".qpy")
-            with open(fixed_path, "rb") as f:
-                qc_t = qpy.load(f)[0]
-    else:
-        if fakebackend:
-            initial_layout = Layout({qc_param.qubits[i]: phys_nodes[i] for i in range(n)})
-            qc_t = transpile(
-                qc_param,
-                backend=backend,
-                initial_layout=initial_layout,
-                optimization_level=3,
-                seed_transpiler=seed_transpiler,
-            )
-        else:
-            # Pure ideal simulation: keep the logical circuit.
-            # Do not transpile against AerSimulator target.
-            qc_t = qc_param.copy()            
-
-    if save_circuit_drawings:
-        save_circuit_draw(qc_t, base_folder, "circuit_transpiled")
-        save_circuit_draw(qc_param, base_folder, "circuit_logical")
-
-    if not simulation:
-        test_circuit_t(
-            qc_t,
-            backend,
-            resource_estimation,
-            csv_path=str(Path(base_folder) / "resource_estimation.csv"),
-            shots=shots,
-            num_param_sets=N,
-        )
-        if resource_estimation:
-            return None
-
-    if not simulation or fakebackend:
-        obs_isa = [obs.apply_layout(qc_t.layout) for obs in obs_list]
-    else:
-        obs_isa = obs_list
-    obs_isa_broadcast = [[obs] for obs in obs_isa]
-
-    theta_reordered = reorder_theta_by_parameter_names(qc_t, param_order, theta_values_all)
-
-    if simulation:
-        job = estimator.run([(qc_t, obs_isa_broadcast, theta_reordered)])
-        result = job.result()[0]
-        evs = np.asarray(result.data.evs, dtype=float)
-        return evs.T, obs_metadata
-
-    return submit_job_and_save_metadata(
-        estimator,
-        qc_t,
-        obs_isa_broadcast,
-        theta_reordered,
+    prepared = prepare_projected_feature_job(
+        qc_param,
+        param_order,
+        phys_nodes,
+        backend,
+        obs_list,
         obs_metadata,
+        simulation=simulation,
+        fakebackend=fakebackend,
         base_folder=base_folder,
-        **(metadata_extra or {}),
+        fixed_circuit=fixed_circuit,
+        seed_transpiler=seed_transpiler,
+        qpy_filename=qpy_filename,
+        save_circuit_drawings=save_circuit_drawings,
+    )
+    return execute_prepared_projected_feature_job(
+        prepared,
+        theta_values_all,
+        backend,
+        estimator,
+        simulation=simulation,
+        resource_estimation=resource_estimation,
+        shots=shots,
+        base_folder=base_folder,
+        metadata_extra=metadata_extra,
     )
