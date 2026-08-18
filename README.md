@@ -8,8 +8,9 @@ machine-learning pipelines.
 
 The central research object in this repository is `XYZProjectiveQFM`: a
 feature-map Hamiltonian that combines ideas from CD-Ising encodings and
-Heisenberg-style multi-axis interactions. The library also includes
-`CDIsingProjectiveQFM` and `HeisenbergProjectiveQFM` as comparison maps.
+Heisenberg-style multi-axis interactions, as introduced in [4]. The library
+also includes `CDIsingProjectiveQFM` and `HeisenbergProjectiveQFM` as
+comparison maps.
 
 ## What The Library Does
 
@@ -302,7 +303,9 @@ option to include two-local diagonal observables $ZZ$, $XX$, and $YY$.
 
 `XYZProjectiveQFM` is the main map in PQFMLib. It generalizes the Ising idea
 from one Pauli axis to several Pauli axes and can also include cross-axis
-interactions. A compact way to write the full Hamiltonian is:
+interactions. This generalized two-qubit Hamiltonian and its application as a
+projective quantum feature map are presented in [4]. A compact way to write
+the full Hamiltonian is:
 
 ```math
 H_f
@@ -551,6 +554,10 @@ computers," arXiv:2509.17715, 2025. https://arxiv.org/abs/2509.17715
 [3] Andras Ferenczi et al., "Credit Default Prediction with Projected Quantum
 Feature Models and Ensembles," arXiv:2510.01129, 2025.
 https://arxiv.org/abs/2510.01129
+
+[4] Rafael Simões do Carmo, Edson Amaro Junior, and Felipe Fanchini,
+"Generalized two-qubit Hamiltonian for Projective Quantum Feature Maps,"
+arXiv:2606.13641 [quant-ph], 2026. https://arxiv.org/abs/2606.13641
 
 ## Repository Structure
 
