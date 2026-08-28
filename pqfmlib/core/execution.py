@@ -97,7 +97,7 @@ def prepare_projected_feature_job(
     *,
     simulation: bool = False,
     fakebackend: bool = False,
-    base_folder: str = "example",
+    base_folder: str | None = "example",
     fixed_circuit: str = "",
     seed_transpiler: int = 42,
     qpy_filename: str = "qfm_circuit.qpy",
@@ -112,7 +112,10 @@ def prepare_projected_feature_job(
     if len(phys_nodes) != n:
         raise ValueError(f"phys_nodes must have length {n}, but got {len(phys_nodes)}")
 
-    Path(base_folder).mkdir(parents=True, exist_ok=True)
+    if base_folder is not None:
+        Path(base_folder).mkdir(parents=True, exist_ok=True)
+    elif not simulation or save_circuit_drawings:
+        raise ValueError("base_folder is required when circuit artifacts may be written.")
 
     fixed_circuit_loaded = bool(fixed_circuit) and (not simulation or use_fixed_circuit_in_simulation)
     if fixed_circuit_loaded:
@@ -180,7 +183,7 @@ def execute_prepared_projected_feature_job(
     simulation: bool = False,
     resource_estimation: bool = False,
     shots: int = 1024,
-    base_folder: str = "example",
+    base_folder: str | None = "example",
     metadata_extra: dict | None = None,
 ):
     """Execute one parameter batch using an already prepared circuit."""
@@ -190,6 +193,8 @@ def execute_prepared_projected_feature_job(
     N = int(theta_values_all.shape[0])
 
     if not simulation:
+        if base_folder is None:
+            raise ValueError("base_folder is required for non-simulation execution.")
         test_circuit_t(
             prepared.qc_t,
             backend,

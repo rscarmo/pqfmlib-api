@@ -316,7 +316,6 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             extracted = _extract_initial_phys_nodes(qc_t, qc_param)
             if extracted is not None:
                 self.phys_nodes = extracted
-                save_json(self.phys_nodes, Path(self.base_folder) / "phys_nodes.json")
         has_fixed_layout = bool(self.fixed_circuit_file_name) and getattr(qc_t, "layout", None) is not None
         if self.fakebackend or has_fixed_layout:
             obs_isa = [obs.apply_layout(qc_t.layout) for obs in obs_list]
@@ -338,6 +337,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
 
         self._prepare_fit_input(X)
         self._reset_fitted_map_state()
+        self.base_folder = None
         self.num_features = self.n_features_in_
         _unused_theta, self.theta_info = make_heisenberg_theta_matrix(
             np.zeros((1, self.n_features_in_), dtype=float),
@@ -346,7 +346,6 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             use_tanh_scaling=self.use_tanh_scaling,
         )
         self.setup_backend_and_estimator()
-        self.prepare_output_folder()
         self.prepare_layout()
         self._prepare_fitted_execution()
         self._mark_fitted(self._transform_config_signature())
@@ -377,7 +376,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             self.estimator,
             simulation=True,
             shots=self.shots,
-            base_folder=self.base_folder,
+            base_folder=None,
         )
         return Xq
 
@@ -417,10 +416,12 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             # physical nodes are extracted and saved after transpilation.
             self.phys_nodes = None
 
-    def _transpile_or_load_circuit(self, qc_param: QuantumCircuit):
+    def _transpile_or_load_circuit(self, qc_param: QuantumCircuit, *, persist_artifacts: bool = False):
         """Transpile/load the Heisenberg circuit following the notebook semantics."""
-        Path(self.base_folder).mkdir(parents=True, exist_ok=True)
-        qpy_path = Path(self.base_folder) / "heisenberg_circuit.qpy"
+        qpy_path = None
+        if persist_artifacts:
+            Path(self.base_folder).mkdir(parents=True, exist_ok=True)
+            qpy_path = Path(self.base_folder) / "heisenberg_circuit.qpy"
 
         if self.fixed_circuit_file_name:
             fixed_path = Path(self.fixed_circuit_file_name)
@@ -450,10 +451,12 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
                 extracted = _extract_initial_phys_nodes(qc_t, qc_param)
                 if extracted is not None:
                     self.phys_nodes = extracted
-                    save_json(self.phys_nodes, Path(self.base_folder) / "phys_nodes.json")
+                    if persist_artifacts:
+                        save_json(self.phys_nodes, Path(self.base_folder) / "phys_nodes.json")
 
-            with open(qpy_path, "wb") as f:
-                qpy.dump(qc_t, f)
+            if persist_artifacts:
+                with open(qpy_path, "wb") as f:
+                    qpy.dump(qc_t, f)
 
         else:
             if self.fakebackend:
@@ -481,7 +484,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
                 )
                 qc_t = pm.run(qc_param)
 
-        if self.save_circuit_drawings:
+        if persist_artifacts and self.save_circuit_drawings:
             save_circuit_draw(qc_t, self.base_folder, "heisenberg_circuit_transpiled")
             save_circuit_draw(qc_param, self.base_folder, "heisenberg_circuit_logical")
 

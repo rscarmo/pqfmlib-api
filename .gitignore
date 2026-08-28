@@ -13,12 +13,16 @@ htmlcov/
 
 # Environments and local configuration
 .venv/
+.venv_gpu/
 venv/
 env/
 .env
 .env.*
 /config.py
 *.token
+outputs/
+tests/
+results/
 
 # OS and editor files
 .DS_Store
@@ -44,6 +48,7 @@ resource_estimation.csv
 *.qpy
 *_circuit_logical.*
 *_circuit_transpiled.*
+QIMED_testes-quantum.ipynb
 
 # Local research/benchmark scripts kept outside the package release
 backup/

@@ -9,13 +9,14 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from qiskit_aer import AerSimulator
+from sklearn.base import BaseEstimator, TransformerMixin
 
 from pqfmlib.core.backend import load_ibm_backend, make_aer_backend, make_estimator
 from pqfmlib.core.data import load_tabular_dataset
 
 
 @dataclass
-class BaseProjectiveQFM:
+class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
     """Shared runner state for PQFM implementations.
 
     Subclasses implement the physics-specific pieces: block construction,
@@ -42,6 +43,16 @@ class BaseProjectiveQFM:
     resilience_level: int = 0
     qiskit_channel: str = "ibm_cloud"
     save_circuit_drawings: bool = False
+
+    def __sklearn_clone__(self):
+        """Return an unfitted estimator containing only constructor parameters.
+
+        PQFM subclasses normalize some constructor parameters during
+        ``__post_init__`` (notably XYZ ``axes``).  Reconstructing explicitly
+        implements scikit-learn's clone protocol without copying fitted quantum
+        state, runtime backends, credentials, or prepared circuits.
+        """
+        return type(self)(**self.get_params(deep=False))
 
     def __post_init__(self) -> None:
         self._validate_resource_estimation_mode()

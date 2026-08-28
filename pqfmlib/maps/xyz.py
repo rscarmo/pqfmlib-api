@@ -573,11 +573,11 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
             obs_metadata,
             simulation=True,
             fakebackend=self.fakebackend,
-            base_folder=self.base_folder,
+            base_folder=None,
             fixed_circuit=self.fixed_circuit_file_name,
             seed_transpiler=self.seed,
             qpy_filename="xyz_circuit.qpy",
-            save_circuit_drawings=self.save_circuit_drawings,
+            save_circuit_drawings=False,
             use_fixed_circuit_in_simulation=True,
             validate_parameter_compatibility=True,
         )
@@ -590,13 +590,13 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
 
         X_fit = self._prepare_fit_input(X)
         self._reset_fitted_map_state()
+        self.base_folder = None
         self.num_features = self.n_features_in_
         self.X_q_all = X_fit
         try:
             self.setup_backend_and_estimator()
-            self.prepare_output_folder()
             self.compute_global_J_and_feature_blocks()
-            self.prepare_blocks_and_edges()
+            self.prepare_blocks_and_edges(persist_artifacts=False)
             self._validate_fitted_feature_indices()
             self._prepare_fitted_execution()
         finally:
@@ -626,7 +626,7 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
             self.estimator,
             simulation=True,
             shots=self.shots,
-            base_folder=self.base_folder,
+            base_folder=None,
         )
         return Xq
 
@@ -712,7 +712,7 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
             if missing:
                 raise ValueError(f"blocks.json does not cover all dataset features. Missing examples: {missing[:10]}")
 
-    def prepare_blocks_and_edges(self) -> None:
+    def prepare_blocks_and_edges(self, *, persist_artifacts: bool = True) -> None:
         if self.ideal:
             self.phys_nodes = list(range(self.q_enc))
             self.edges_log = [(i, j) for i in range(self.q_enc) for j in range(i + 1, self.q_enc)]
@@ -739,7 +739,8 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
                 )
                 self.blocks.append({"feat_ids_by_axis": feat_ids_by_axis, "J_terms": J_terms})
             self._validate_blocks_consistency()
-            save_json(blocks_to_jsonable(self.blocks), Path(self.base_folder) / "blocks.json")
+            if persist_artifacts:
+                save_json(blocks_to_jsonable(self.blocks), Path(self.base_folder) / "blocks.json")
             return
 
         self._load_real_backend()
@@ -748,7 +749,8 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
             self.phys_nodes = load_json(self.fixed_phys_nodes_file)
         else:
             self.phys_nodes = pick_connected_subset_greedy(self.q_enc, coupling_edges, edge_cost)
-            save_json(self.phys_nodes, Path(self.base_folder) / "phys_nodes.json")
+            if persist_artifacts:
+                save_json(self.phys_nodes, Path(self.base_folder) / "phys_nodes.json")
         validate_phys_nodes(self.phys_nodes, self.q_enc, coupling_edges, self.ibm_qpu)
         self.edges_log, self.edge_weight = edges_log_from_phys_nodes(coupling_edges, self.phys_nodes, edge_cost)
         self.edges_act = self.edges_log
@@ -778,7 +780,8 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
                 )
                 self.blocks.append({"feat_ids_by_axis": feat_ids_by_axis, "J_terms": J_terms})
             self._validate_blocks_consistency()
-            save_json(blocks_to_jsonable(self.blocks), Path(self.base_folder) / "blocks.json")
+            if persist_artifacts:
+                save_json(blocks_to_jsonable(self.blocks), Path(self.base_folder) / "blocks.json")
         print("Physical subgraph:", self.phys_nodes)
         print("Number of blocks:", len(self.blocks))
 
