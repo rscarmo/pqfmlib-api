@@ -88,6 +88,10 @@ def makeAlpha1(h_x, J_dict, s):
     sum_Jij2 = sum(Jij**2 for Jij in J_dict.values())
     alpha1 = -(1 / 4) * (sum_hi2 + 2 * sum_Jij2)
     Rt = makeRt(h_x, J_dict, s, sum_hi2, 2 * sum_Jij2)
+    if np.isclose(Rt, 0.0):
+        if not np.isclose(alpha1, 0.0):
+            raise ZeroDivisionError("CD denominator Rt is zero while alpha1 is nonzero.")
+        return 0.0
     return alpha1 / Rt
 
 

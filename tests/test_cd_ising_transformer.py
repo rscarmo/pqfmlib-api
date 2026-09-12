@@ -8,9 +8,18 @@ from unittest.mock import Mock, patch, sentinel
 import numpy as np
 
 from pqfmlib import CDIsingProjectiveQFM
+from pqfmlib.maps.cd_ising import makeAlpha1
 
 
 class CDIsingTransformerTests(unittest.TestCase):
+    def test_zero_fields_and_couplings_produce_zero_alpha(self):
+        self.assertEqual(makeAlpha1(np.zeros(3), {}, 0.5), 0.0)
+
+    def test_zero_denominator_with_nonzero_numerator_raises(self):
+        with patch("pqfmlib.maps.cd_ising.makeRt", return_value=0.0):
+            with self.assertRaisesRegex(ZeroDivisionError, "alpha1 is nonzero"):
+                makeAlpha1(np.array([1.0]), {}, 0.5)
+
     @staticmethod
     def _interaction_matrix():
         return np.array(

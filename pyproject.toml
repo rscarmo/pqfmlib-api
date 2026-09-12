@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pqfmlib"
-version = "0.1.0"
+version = "0.1.1"
 description = "Projected Quantum Feature Maps for tabular machine learning"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,6 +18,11 @@ dependencies = [
   "qiskit>=1.0",
   "qiskit-aer>=0.14",
   "qiskit-ibm-runtime>=0.25",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -22,6 +22,7 @@ from pqfmlib.core.execution import (
     submit_job_and_save_metadata,
     validate_circuit_parameter_compatibility,
 )
+from pqfmlib.core.observables import pauli_string
 from pqfmlib.core.resources import test_circuit_t
 from pqfmlib.core.serialization import metadata_to_column_name
 from pqfmlib.hardware.coupling import get_coupling_edges_and_costs
@@ -51,18 +52,12 @@ def heisenberg_chain_observables(
     obs = []
     metadata = []
 
-    def pauli_string(terms):
-        p = ["I"] * num_qubits
-        for idx, axis in terms:
-            p[int(idx)] = str(axis).upper()
-        return "".join(p)
-
     # One-local observables: Z, X, Y per qubit.
     for i in range(num_qubits):
         for axis in ("z", "x", "y"):
             obs.append(
                 SparsePauliOp.from_list(
-                    [(pauli_string([(i, axis)]), 1.0)]
+                    [(pauli_string(num_qubits, [(i, axis)]), 1.0)]
                 )
             )
             metadata.append((axis, i))
@@ -79,7 +74,7 @@ def heisenberg_chain_observables(
                 axis_pair = axis + axis
                 obs.append(
                     SparsePauliOp.from_list(
-                        [(pauli_string([(i, axis), (j, axis)]), 1.0)]
+                        [(pauli_string(num_qubits, [(i, axis), (j, axis)]), 1.0)]
                     )
                 )
                 metadata.append((axis_pair, i, j))
@@ -245,6 +240,8 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        if int(self.q_enc) < 2:
+            raise ValueError("HeisenbergProjectiveQFM requires q_enc >= 2.")
         self.phys_nodes = None
         self.obs_metadata = None
         self.Xq_all_raw = None

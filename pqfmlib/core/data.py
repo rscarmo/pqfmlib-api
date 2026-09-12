@@ -17,6 +17,10 @@ def validate_numeric_dataframe(df: pd.DataFrame) -> None:
     if df.isna().any().any():
         cols_nan = df.columns[df.isna().any()].tolist()
         raise ValueError(f"The dataset contains NaN values. Columns with NaN: {cols_nan}")
+    finite = np.isfinite(df.to_numpy(dtype=float))
+    if not finite.all():
+        cols_nonfinite = df.columns[~finite.all(axis=0)].tolist()
+        raise ValueError(f"The dataset contains non-finite values. Columns with non-finite values: {cols_nonfinite}")
 
 
 def load_tabular_dataset(name_file: str, data_dir: str = "./data"):
@@ -25,6 +29,8 @@ def load_tabular_dataset(name_file: str, data_dir: str = "./data"):
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
     df = pd.read_csv(path)
+    if df.shape[1] < 2:
+        raise ValueError("The dataset must contain at least one feature column and one target column.")
     validate_numeric_dataframe(df)
     X = df.iloc[:, :-1].to_numpy(dtype=float)
     y = df.iloc[:, -1].to_numpy()
@@ -33,7 +39,14 @@ def load_tabular_dataset(name_file: str, data_dir: str = "./data"):
 
 def mutual_information_matrix(X: np.ndarray, *, seed: int = 42, rho_thr: float = 0.0) -> np.ndarray:
     """Compute a normalized pairwise mutual-information matrix among features."""
+    X = np.asarray(X, dtype=float)
+    if X.ndim != 2:
+        raise ValueError("X must be a 2D feature matrix.")
     n_features = int(X.shape[1])
+    if n_features < 1:
+        raise ValueError("X must contain at least one feature column.")
+    if not np.isfinite(X).all():
+        raise ValueError("X must contain only finite values.")
     MI = np.zeros((n_features, n_features), dtype=float)
     exact_duplicates = np.zeros((n_features, n_features), dtype=bool)
     for i in range(n_features):

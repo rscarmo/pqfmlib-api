@@ -9,10 +9,13 @@ from qiskit.quantum_info import SparsePauliOp
 
 
 def pauli_string(n: int, terms) -> str:
-    """Return an n-qubit Pauli string from pairs (index, axis)."""
+    """Return a Qiskit Pauli label from logical pairs (qubit index, axis)."""
     p = ["I"] * int(n)
     for idx, axis in terms:
-        p[int(idx)] = str(axis).upper()
+        q = int(idx)
+        if q < 0 or q >= int(n):
+            raise IndexError(f"Qubit index {q} is out of range for {n} qubits.")
+        p[int(n) - 1 - q] = str(axis).upper()
     return "".join(p)
 
 

@@ -75,13 +75,17 @@ class ExecutionPreparationTests(unittest.TestCase):
         np.testing.assert_array_equal(second[0], [[0.3]])
         self.assertIs(first[1], metadata)
 
-    def test_legacy_wrapper_preserves_pure_simulation_behavior(self):
+    def test_legacy_wrapper_honors_fixed_circuit_during_simulation(self):
         circuit, param_order, observables, metadata = self._circuit_and_inputs()
         estimator = Mock()
         estimator.run.return_value = _SimulationJob(np.array([[0.5, 0.6]]))
 
         with tempfile.TemporaryDirectory() as folder:
-            missing_fixed_circuit = str(Path(folder) / "does_not_exist.qpy")
+            fixed_circuit = QuantumCircuit(1)
+            fixed_circuit.rx(param_order[0], 0)
+            fixed_path = Path(folder) / "fixed.qpy"
+            with fixed_path.open("wb") as stream:
+                qpy.dump(fixed_circuit, stream)
             result = run_projected_feature_job(
                 circuit,
                 param_order,
@@ -94,11 +98,34 @@ class ExecutionPreparationTests(unittest.TestCase):
                 simulation=True,
                 fakebackend=False,
                 base_folder=folder,
-                fixed_circuit=missing_fixed_circuit,
+                fixed_circuit=str(fixed_path),
             )
 
         np.testing.assert_array_equal(result[0], [[0.5], [0.6]])
         self.assertIs(result[1], metadata)
+        submitted_circuit = estimator.run.call_args.args[0][0][0]
+        self.assertEqual(submitted_circuit.data[0].operation.name, "rx")
+
+    def test_legacy_wrapper_rejects_missing_fixed_circuit_during_simulation(self):
+        circuit, param_order, observables, metadata = self._circuit_and_inputs()
+
+        with tempfile.TemporaryDirectory() as folder:
+            missing_fixed_circuit = str(Path(folder) / "does_not_exist.qpy")
+            with self.assertRaises(FileNotFoundError):
+                run_projected_feature_job(
+                    circuit,
+                    param_order,
+                    np.array([[0.0]]),
+                    [0],
+                    backend=None,
+                    estimator=Mock(),
+                    obs_list=observables,
+                    obs_metadata=metadata,
+                    simulation=True,
+                    fakebackend=False,
+                    base_folder=folder,
+                    fixed_circuit=missing_fixed_circuit,
+                )
 
     def test_legacy_wrapper_delegates_to_prepare_and_execute(self):
         circuit, param_order, observables, metadata = self._circuit_and_inputs()

@@ -151,6 +151,7 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
         self._validate_resource_estimation_mode()
         if self.ideal:
             self.backend = self._make_aer_backend()
+            self._set_aer_max_qubits()
         else:
             self._load_real_backend()
             if self.simulation:
@@ -161,8 +162,10 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
                         device=self.fakebackend_device,
                         seed_simulator=self.seed,
                     )
+                    self._set_aer_max_qubits()
                 else:
                     self.backend = self._make_aer_backend()
+                    self._set_aer_max_qubits()
             else:
                 self.backend = self.real_backend
                 self.backend.options.seed_transpiler = self.seed
@@ -181,6 +184,10 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
             mps_max_bond_dimension=self.mps_max_bond_dimension,
             mps_truncation_threshold=self.mps_truncation_threshold,
         )
+
+    def _set_aer_max_qubits(self) -> None:
+        if isinstance(self.backend, AerSimulator) and hasattr(self.backend, "set_max_qubits"):
+            self.backend.set_max_qubits(int(self.q_enc))
 
     def ensure_output_folder(self, name: str) -> str:
         if self.output_root in ("", ".", "./", ".\\"):

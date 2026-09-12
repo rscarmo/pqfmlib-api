@@ -9,10 +9,46 @@ import numpy as np
 from qiskit import qpy
 
 from pqfmlib import HeisenbergProjectiveQFM
-from pqfmlib.maps.heisenberg import build_heisenberg_chain_feature_circuit
+from pqfmlib.core.observables import pauli_string
+from pqfmlib.maps.heisenberg import build_heisenberg_chain_feature_circuit, heisenberg_chain_observables
+from scripts.get_job_heisenberg import fallback_heisenberg_names
 
 
 class HeisenbergTransformerTests(unittest.TestCase):
+    def test_requires_at_least_two_qubits(self):
+        with self.assertRaisesRegex(ValueError, "q_enc >= 2"):
+            HeisenbergProjectiveQFM(name_file="invalid", q_enc=1)
+
+    def test_fallback_names_match_observable_order(self):
+        self.assertEqual(
+            fallback_heisenberg_names(6, ["z", "x", "y"]),
+            ["q1_z_0", "q1_x_0", "q1_y_0", "q1_z_1", "q1_x_1", "q1_y_1"],
+        )
+
+    def test_pauli_string_uses_qiskit_qubit_order(self):
+        self.assertEqual(pauli_string(3, [(0, "Z")]), "IIZ")
+        self.assertEqual(pauli_string(3, [(1, "X")]), "IXI")
+        self.assertEqual(pauli_string(3, [(2, "Y")]), "YII")
+
+    def test_pauli_string_rejects_out_of_range_qubit_indices(self):
+        with self.assertRaisesRegex(IndexError, "out of range"):
+            pauli_string(3, [(-1, "Z")])
+        with self.assertRaisesRegex(IndexError, "out of range"):
+            pauli_string(3, [(3, "Z")])
+
+    def test_heisenberg_observables_follow_metadata_qubit_order(self):
+        observables, metadata = heisenberg_chain_observables(
+            3,
+            measure_2local_diagonal=True,
+            edges_act=[(0, 1)],
+        )
+        labels = [observable.paulis[0].to_label() for observable in observables]
+
+        self.assertEqual(metadata[:6], [("z", 0), ("x", 0), ("y", 0), ("z", 1), ("x", 1), ("y", 1)])
+        self.assertEqual(labels[:6], ["IIZ", "IIX", "IIY", "IZI", "IXI", "IYI"])
+        self.assertEqual(metadata[9:], [("zz", 0, 1), ("xx", 0, 1), ("yy", 0, 1)])
+        self.assertEqual(labels[9:], ["IZZ", "IXX", "IYY"])
+
     @staticmethod
     def _mock_backend_setup(qfm):
         def setup():

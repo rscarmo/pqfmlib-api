@@ -43,7 +43,7 @@ def fallback_heisenberg_names(n_q_feats, axes):
     if n_q_feats % len(axes) != 0:
         return [f"qfeat_{k}" for k in range(n_q_feats)]
     n_qubits = n_q_feats // len(axes)
-    return [f"q1_{axis}_{qi}" for axis in axes for qi in range(n_qubits)]
+    return [f"q1_{axis}_{qi}" for qi in range(n_qubits) for axis in axes]
 
 
 def main():

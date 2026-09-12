@@ -267,6 +267,8 @@ def run_projected_feature_job(
         seed_transpiler=seed_transpiler,
         qpy_filename=qpy_filename,
         save_circuit_drawings=save_circuit_drawings,
+        use_fixed_circuit_in_simulation=bool(fixed_circuit),
+        validate_parameter_compatibility=bool(fixed_circuit),
     )
     return execute_prepared_projected_feature_job(
         prepared,
