@@ -35,6 +35,7 @@ Thumbs.db
 # Local datasets and notebooks
 data/
 *.ipynb
+!examples/*.ipynb
 dataset_exploration.ipynb
 
 # Experiment outputs and generated quantum artifacts
