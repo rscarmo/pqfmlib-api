@@ -247,6 +247,7 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
             bool(self.simulation),
             bool(self.fakebackend),
             bool(self.ideal),
+            self.expectation_method,
             int(self.shots),
             str(self.ibm_qpu),
             int(self.q_enc),
@@ -389,6 +390,7 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
             self.backend,
             self.estimator,
             simulation=True,
+            expectation_method=self.expectation_method,
             shots=self.shots,
             base_folder=None,
         )
@@ -500,6 +502,7 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
             simulation=self.simulation,
             fakebackend=self.fakebackend,
             resource_estimation=self.resource_estimation,
+            expectation_method=self.expectation_method,
             shots=self.shots,
             base_folder=self.base_folder,
             fixed_circuit=self.fixed_circuit_file_name,

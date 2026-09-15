@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 from qiskit import qpy, transpile
+from qiskit.quantum_info import Statevector
+from qiskit_aer import AerSimulator
 from qiskit.transpiler import Layout
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
@@ -174,6 +176,43 @@ def prepare_projected_feature_job(
     )
 
 
+def execute_statevector_features(prepared, theta_values_all, backend):
+    """Simulate each sample once, then reuse its state for every observable.
+
+    Process one state at a time so full state vectors do not accumulate with
+    dataset size. Aer uses the configured CPU/GPU; expectations run on CPU.
+    """
+    if not isinstance(backend, AerSimulator):
+        raise ValueError("statevector execution requires AerSimulator.")
+    if backend.options.method != "statevector" or backend.options.noise_model is not None:
+        raise ValueError("statevector execution requires a noiseless statevector backend.")
+    circuit = prepared.qc_t.copy()
+    if circuit.num_clbits or any(
+        instruction.operation.name in {"measure", "reset", "initialize", "kraus", "superop"}
+        for instruction in circuit.data
+    ):
+        raise ValueError("statevector execution requires a unitary circuit without classical bits.")
+    # Compile once per transform, not once per observable or sample.
+    circuit = transpile(circuit, backend, optimization_level=0)
+    if any(instruction.operation.name in {"measure", "reset", "initialize", "kraus", "superop"}
+           for instruction in circuit.data):
+        raise ValueError("statevector execution requires unitary operations.")
+    theta = reorder_theta_by_parameter_names(circuit, prepared.param_order, theta_values_all)
+    circuit.save_statevector(label="pqfm_state")
+    observables = [entry[0] for entry in prepared.obs_isa_broadcast]
+    features = np.empty((len(theta), len(observables)), dtype=float)
+    for row, values in enumerate(theta):
+        bound = circuit.assign_parameters(dict(zip(circuit.parameters, values)))
+        # One deterministic evolution; this is not sampling observables.
+        result = backend.run(bound, shots=1).result()
+        if not result.success:
+            raise RuntimeError(f"Statevector simulation failed: {result.status}")
+        state = Statevector(result.data(0)["pqfm_state"])
+        for column, observable in enumerate(observables):
+            features[row, column] = float(np.real(state.expectation_value(observable)))
+    return features, prepared.obs_metadata
+
+
 def execute_prepared_projected_feature_job(
     prepared,
     theta_values_all,
@@ -182,6 +221,7 @@ def execute_prepared_projected_feature_job(
     *,
     simulation: bool = False,
     resource_estimation: bool = False,
+    expectation_method: str = "shots",
     shots: int = 1024,
     base_folder: str | None = "example",
     metadata_extra: dict | None = None,
@@ -190,6 +230,12 @@ def execute_prepared_projected_feature_job(
     theta_values_all = np.asarray(theta_values_all)
     if theta_values_all.ndim != 2:
         raise ValueError("theta_values_all must be a 2D matrix.")
+    if expectation_method not in ("shots", "statevector"):
+        raise ValueError("Unknown expectation_method.")
+    if expectation_method == "statevector":
+        if not simulation:
+            raise ValueError("statevector requires simulation=True.")
+        return execute_statevector_features(prepared, theta_values_all, backend)
     N = int(theta_values_all.shape[0])
 
     if not simulation:
@@ -242,6 +288,7 @@ def run_projected_feature_job(
     simulation: bool = False,
     fakebackend: bool = False,
     resource_estimation: bool = False,
+    expectation_method: str = "shots",
     shots: int = 1024,
     base_folder: str = "example",
     fixed_circuit: str = "",
@@ -253,6 +300,8 @@ def run_projected_feature_job(
     """Run or submit a projected feature-map Estimator job."""
     if np.asarray(theta_values_all).ndim != 2:
         raise ValueError("theta_values_all must be a 2D matrix.")
+    if expectation_method == "statevector" and (not simulation or fakebackend):
+        raise ValueError("statevector requires simulation=True and fakebackend=False.")
     prepared = prepare_projected_feature_job(
         qc_param,
         param_order,
@@ -277,6 +326,7 @@ def run_projected_feature_job(
         estimator,
         simulation=simulation,
         resource_estimation=resource_estimation,
+        expectation_method=expectation_method,
         shots=shots,
         base_folder=base_folder,
         metadata_extra=metadata_extra,

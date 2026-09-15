@@ -40,6 +40,120 @@ or install dependencies manually:
 pip install -r requirements.txt
 ```
 
+## Choosing `expectation_method` (since 0.2.0)
+
+All three maps (`XYZProjectiveQFM`, `CDIsingProjectiveQFM`, and
+`HeisenbergProjectiveQFM`) accept the keyword-only option
+`expectation_method="statevector"`. The default remains `"shots"`.
+
+| Method | How features are computed | When to use it |
+|---|---|---|
+| `"shots"` | Estimate expectations from finite measurement samples; `shots` controls the sampling budget. | Sampling experiments, noisy simulation, or real hardware. |
+| `"statevector"` | Evolve one full state per sample and compute each expectation directly from it. | Noiseless simulation when the full state fits in memory. |
+
+`ideal=True` alone does **not** select exact expectations. Set
+`expectation_method="statevector"` explicitly to avoid finite-shot sampling.
+
+### Supported configurations
+
+| Configuration | `statevector` support |
+|---|---|
+| `simulation=True`, `fakebackend=False`, `mps=False`, `ideal=True` | Yes; no hardware credentials needed. |
+| Same configuration with `ideal=False` | Yes; hardware information/credentials may still be needed for topology and assignment. |
+| `fakebackend=True` | No. |
+| `simulation=False` | No. |
+| `mps=True` | No; this option computes the full vector. |
+
+Incompatible configurations raise `ValueError`. The method is available on all
+three map constructors; it does not change their encoding or observable options.
+
+### Complete example: exact XYZ features
+
+Split the dataset before fitting preprocessing or the map. This example uses
+six classical features and runs without credentials on CPU:
+
+```python
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from pqfmlib import XYZProjectiveQFM
+
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X[:, :6], y, test_size=0.2, stratify=y, random_state=42,
+)
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+pqfm = XYZProjectiveQFM(
+    name_file="exact_xyz",
+    q_enc=6,
+    simulation=True,
+    fakebackend=False,
+    ideal=True,
+    expectation_method="statevector",
+    encoding_mode="shared_feature",
+    features_per_qubit=1,
+    axes=("x", "y", "z"),
+    keep_diagonal_terms=False,
+    keep_cross_terms=True,
+    measure_cross_observables=True,
+    use_gpu_statevector=False,
+)
+X_quantum = pqfm.fit_transform(X_train)
+X_quantum_test = pqfm.transform(X_test)
+```
+
+### Execution and cost
+
+This option works with both `fit/transform` and `run()`. It requires
+`simulation=True`, `fakebackend=False`, and `mps=False`; `ideal` can be either
+value. With `ideal=False`, hardware information is still loaded for the map's
+existing topology/assignment logic, but simulation remains noiseless.
+
+For each sample, Aer evolves one full state vector and all observables reuse
+that vector. The configured CPU/GPU device is used for evolution; observable
+expectations are calculated on the CPU. States are processed one at a time,
+not retained for the entire dataset. Memory still scales exponentially with
+the circuit's qubit count, including any ancillas in loaded circuits.
+
+`shots` is ignored in this mode. Aer executes a single deterministic evolution
+per sample (`shots=1` internally), without sampling observable measurements.
+Results have no finite-shot sampling error, subject to floating-point accuracy.
+Adding observables still costs expectation-value calculations, but does not
+repeat state preparation or require measurement groups. Nonunitary circuits
+with measurement/reset are unsupported in this mode. The returned feature
+matrix and observable ordering are unchanged. Changing execution mode after
+`fit()` requires fitting again.
+
+### Switching methods
+
+For a new map, omit `expectation_method` or set it to `"shots"` to retain the
+previous behavior. For an existing fitted map, change the option and refit:
+
+```python
+pqfm.set_params(expectation_method="shots", shots=4096)
+X_quantum_sampled = pqfm.fit_transform(X_train)
+```
+
+The methods estimate the same observables, but finite-shot results will not
+match exact features bit for bit. Retrain downstream preprocessing/classifiers
+when switching modes. Restart a running notebook kernel after updating the
+library so it imports the new constructor.
+
+The [hybrid Breast Cancer notebook](examples/xyz_breast_cancer_shap_pipeline.ipynb)
+uses exact expectations and prepares PQFM/PCA features once per CV fold,
+reusing them across classifier candidates.
+
+### Verification
+
+Run the deterministic exact-execution tests with:
+
+```bash
+python -m unittest discover -s tests -p 'test_statevector_execution.py' -v
+```
+
 ## Data Format
 
 Datasets are loaded from:

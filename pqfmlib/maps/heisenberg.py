@@ -18,6 +18,7 @@ from pqfmlib.core.base import BaseProjectiveQFM
 from pqfmlib.core.execution import (
     PreparedProjectedFeatureJob,
     execute_prepared_projected_feature_job,
+    execute_statevector_features,
     reorder_theta_by_parameter_names,
     submit_job_and_save_metadata,
     validate_circuit_parameter_compatibility,
@@ -258,6 +259,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             bool(self.simulation),
             bool(self.fakebackend),
             bool(self.ideal),
+            self.expectation_method,
             int(self.shots),
             str(self.ibm_qpu),
             int(self.q_enc),
@@ -372,6 +374,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             self.backend,
             self.estimator,
             simulation=True,
+            expectation_method=self.expectation_method,
             shots=self.shots,
             base_folder=None,
         )
@@ -531,6 +534,15 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
         }
         if self.phys_nodes is not None:
             metadata_extra["phys_nodes"] = [int(x) for x in self.phys_nodes]
+
+        if self.simulation and self.expectation_method == "statevector":
+            prepared = PreparedProjectedFeatureJob(
+                qc_t, tuple(param_order), obs_isa_broadcast, obs_metadata,
+            )
+            self.Xq_all_raw, self.obs_metadata = execute_statevector_features(
+                prepared, theta_values_all, self.backend,
+            )
+            return None
 
         if self.simulation:
             job = self.estimator.run([(qc_t, obs_isa_broadcast, theta_reordered)])

@@ -21,7 +21,9 @@ env/
 /config.py
 *.token
 outputs/
-tests/
+tests/*
+!tests/test_statevector_execution.py
+!tests/test_xyz_shap_notebook.py
 results/
 backup/
 
@@ -37,6 +39,7 @@ data/
 *.ipynb
 !examples/*.ipynb
 dataset_exploration.ipynb
+tutorial/
 
 # Experiment outputs and generated quantum artifacts
 results/
@@ -51,9 +54,6 @@ resource_estimation.csv
 *.qpy
 *_circuit_logical.*
 *_circuit_transpiled.*
-QIMED_testes-quantum.ipynb
-QIMED_MoE_GQC_Heisenberg_pqfmlib_api.ipynb
-QIMED_MoE_GQC_XYZ_pqfmlib_api.ipynb
 
 # Local research/benchmark scripts kept outside the package release
 backup/

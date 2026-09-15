@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +28,7 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
     simulation: bool = True
     fakebackend: bool = False
     ideal: bool = True
+    expectation_method: str = field(default="shots", kw_only=True)
     shots: int = 4096
     ibm_qpu: str = "ibm_fez"
     q_enc: int = 20
@@ -55,6 +56,7 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
         return type(self)(**self.get_params(deep=False))
 
     def __post_init__(self) -> None:
+        self._validate_expectation_method()
         self._validate_resource_estimation_mode()
         if self.ideal:
             self.simulation = True
@@ -138,6 +140,15 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
             raise ValueError("DataFrame columns must match the names and order used during fit.")
         return values
 
+    def _validate_expectation_method(self) -> None:
+        if self.expectation_method not in ("shots", "statevector"):
+            raise ValueError("expectation_method must be 'shots' or 'statevector'.")
+        if self.expectation_method == "statevector":
+            if not self.simulation or self.fakebackend:
+                raise ValueError("statevector requires simulation=True and fakebackend=False.")
+            if self.mps:
+                raise ValueError("statevector requires mps=False (full state vector).")
+
     def _validate_resource_estimation_mode(self) -> None:
         if self.ideal and bool(getattr(self, "resource_estimation", False)):
             raise ValueError("resource_estimation=True is invalid when ideal=True; ideal simulations do not use QPU resources.")
@@ -148,6 +159,7 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
         self.num_features = int(self.X.shape[1])
 
     def setup_backend_and_estimator(self) -> None:
+        self._validate_expectation_method()
         self._validate_resource_estimation_mode()
         if self.ideal:
             self.backend = self._make_aer_backend()
@@ -169,7 +181,10 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
             else:
                 self.backend = self.real_backend
                 self.backend.options.seed_transpiler = self.seed
-        self.estimator = make_estimator(self.backend, shots=self.shots, resilience_level=self.resilience_level)
+        self.estimator = (
+            make_estimator(self.backend, shots=self.shots, resilience_level=self.resilience_level)
+            if self.expectation_method == "shots" else None
+        )
 
     def _load_real_backend(self) -> None:
         if self.real_backend is None:
