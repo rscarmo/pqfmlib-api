@@ -22,6 +22,7 @@ import numpy as np
 from qiskit import transpile
 from qiskit.circuit import ParameterExpression
 from pqfmlib.core.framework import validate_precision
+from pqfmlib.core.observables import group_paulis_qubitwise
 
 
 # CUDA-Q targets and MPS environment settings are process-global. Serialize
@@ -191,18 +192,7 @@ def _compile_job(cudaq, prepared, *, measurement_basis=None):
 
 def _group_paulis(labels):
     """Stable greedy grouping by qubit-wise compatibility (Qiskit label order)."""
-    groups = []
-    for index, label in enumerate(labels):
-        for basis, members in groups:
-            if all(a == 'I' or b == 'I' or a == b for a, b in zip(basis, label)):
-                for q, axis in enumerate(label):
-                    if axis != 'I':
-                        basis[q] = axis
-                members.append(index)
-                break
-        else:
-            groups.append((list(label), [index]))
-    return [(''.join(basis), tuple(members)) for basis, members in groups]
+    return group_paulis_qubitwise(labels)
 
 
 def _measure_basis(kernel, qubits, basis):

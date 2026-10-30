@@ -29,10 +29,97 @@ PQFMLib turns a numeric CSV dataset into quantum features through this workflow:
 6. Measure one-local and two-local Pauli observables.
 7. Save the resulting projected quantum features to CSV/NPY.
 
-The library supports ideal simulation with Qiskit/Aer or CUDA-Q.
-Fake-backend simulation from IBM backends, hardware-topology-aware
-simulation, resource estimation, and real IBM Quantum execution remain
-available through Qiskit.
+The library supports ideal simulation and explicit native-topology noiseless
+simulation with Qiskit/Aer, CUDA-Q, or the optional TileLang executor.
+TileLang supports FP32/FP64 statevectors with exact or finite-shot expectations
+for all four public map classes;
+see [installation, coverage and GPU tests](docs/tilelang.md).
+TileLang uses exact gate fusion, memory-bounded sample batches and automatic
+causal-cone/full-state selection. See the [native-graph measurements](docs/benchmarks/tilelang_phase3.md)
+for reproducible timings and their workload limits.
+Affine matrix preparation now runs on GPU and reuses fixed plans; see the
+[additional optimization measurements](docs/benchmarks/tilelang_matrices.md).
+Automatic evolution/reduction kernel selection is covered by the subsequent
+[kernel measurements](docs/benchmarks/tilelang_kernels.md).
+Fake-backend simulation from IBM backends,
+resource estimation, and real IBM Quantum execution remain available through
+Qiskit.
+
+## Native Simulation From a Saved Topology
+
+`ideal=True` retains complete connectivity in CD-Ising and XYZ. Heisenberg and
+superexchange Heisenberg retain their default chain and can explicitly select
+`topology="full"` with `ideal=True`. Native connectivity requires `ideal=False`;
+`simulation=True, fakebackend=False` keeps the simulation noiseless.
+
+All four public map classes accept `topology="native"` and an optional
+`topology_file` to read physical connectivity without IBM credentials or network
+access. For example:
+
+```python
+from pqfmlib import XYZProjectiveQFM
+
+qfm = XYZProjectiveQFM(
+    name_file="native_example",
+    q_enc=3,
+    ideal=False,
+    simulation=True,
+    fakebackend=False,
+    topology="native",
+    topology_file="topology.json",
+    framework="qiskit",
+    expectation_method="statevector",
+)
+Xq = qfm.fit_transform(X_train)
+```
+
+A minimal `topology.json` contains:
+
+```json
+{
+  "schema_version": 1,
+  "coupling_edges": [[0, 1], [1, 2], [1, 3]]
+}
+```
+
+Edges use physical qubit numbers; both directions may be listed separately.
+The existing algorithm selects a connected subgraph of `q_enc` physical qubits.
+Use `use_fixed_phys_nodes=True, fixed_phys_nodes_file="nodes.json"` to supply
+an ordered physical-node list such as `[1, 0, 2]`. These nodes become logical
+indices for simulation; physical numbering does not expand the statevector.
+
+To reproduce both connectivity and quality-based selection from an already
+loaded backend, save its metadata with:
+
+```python
+from pqfmlib.hardware.topology import save_topology_snapshot
+
+save_topology_snapshot(backend, "topology.json")
+```
+
+Optional `edge_costs` entries have the form `[source, target, cost]`, with costs
+between 0 and 1. They guide subgraph selection and, with `use_edge_error=True`,
+CD-Ising/XYZ feature assignment; they do not add noise. Missing costs default
+to 1.0, as for missing backend error metadata. Preserve edge order and costs
+to reproduce the same selection. Without `topology_file`, the existing IBM
+backend loader supplies connectivity and may require credentials. Neither
+topology loading nor this simulation workflow submits a QPU job.
+
+CD-Ising/XYZ default to `topology="auto"`, retaining full connectivity for
+`ideal=True` and backend connectivity for `ideal=False`. Explicit `"full"`
+requires `ideal=True`, and explicit `"native"` requires `ideal=False`.
+Native XYZ respects `measure_all_zz=False` for native-edge pairs; set it to
+`True` for every pair. Superexchange uses the same native graph and still
+requires exactly one feature per qubit. These configuration fields are frozen
+by `fit()`; changing them requires refitting.
+
+CUDA-Q accepts this explicit native path with `framework="cudaq"` and
+`expectation_method="exact"` (or `"shots"`), subject to its GPU requirements.
+`topology_file` is restricted to noiseless simulation, not fake-backend or QPU
+execution. TileLang accepts the same native path with `framework="tilelang"`,
+`expectation_method="exact"`, `"statevector"`, or `"shots"`, and
+`precision="single"` or `"double"`. See the
+[extension plan](docs/tilelang-extension-plan.md).
 
 ## Data Format
 
@@ -177,7 +264,8 @@ optional NVIDIA GPU simulation through the cuQuantum libraries.
 Select `framework="cudaq"` on any of the three feature maps to use this
 integration. PQFMLib handles circuit translation and observable evaluation;
 you keep the same `fit`, `transform` and `fit_transform` interface without
-writing CUDA-Q kernels. The current integration supports ideal simulation.
+writing CUDA-Q kernels. The integration supports noiseless simulation with
+ideal connectivity or explicitly selected native connectivity.
 
 ### Shared construction and separate execution
 
@@ -198,10 +286,10 @@ Logical qubit indices and feature-column order are preserved.
       CPU/GPU simulation    GPU simulation
 ```
 
-All three maps accept `framework="qiskit"` (the default) or
-`framework="cudaq"`. The choice changes execution while retaining the same
-feature-map construction and transformer interface. CUDA-Q currently supports
-only ideal simulation; Qiskit also provides the topology-aware, fake-backend
+All maps accept `framework="qiskit"` (the default), `framework="cudaq"` or
+`framework="tilelang"`. The choice changes execution while retaining the same
+feature-map construction and transformer interface. CUDA-Q supports ideal and
+explicit native noiseless simulation; Qiskit also provides the fake-backend
 and IBM Quantum execution modes described under [Execution Modes](#execution-modes).
 
 ### Optional CUDA-Q installation
@@ -245,7 +333,7 @@ the file for FP32. The same framework selection applies to
 
 `HeisenbergProjectiveQFM`, `CDIsingProjectiveQFM`, and `XYZProjectiveQFM` all
 accept the keyword-only parameter `framework="qiskit"`. The accepted values
-are `"qiskit"` and `"cudaq"`; omitting it preserves the existing Qiskit defaults
+are `"qiskit"`, `"cudaq"` and `"tilelang"`; omitting it preserves the existing Qiskit defaults
 and behavior. `mps` selects the simulation representation independently of
 the framework:
 
@@ -261,10 +349,16 @@ the framework:
 | `framework="qiskit", mps=True` | Aer matrix product state | CPU |
 | `framework="cudaq", mps=False` | CUDA-Q `nvidia` / cuStateVec | GPU |
 | `framework="cudaq", mps=True` | CUDA-Q `tensornet-mps` / cuTensorNet | GPU |
+| `framework="tilelang", mps=False` | FP32/FP64 statevector, exact or sampled expectations | NVIDIA GPU |
 
-**In this version, CUDA-Q requires `simulation=True`, `ideal=True`, and
-`fakebackend=False`.** `ideal=False`, fake-backend simulation, QPU execution,
-and resource estimation are unsupported for CUDA-Q and raise clear errors.
+TileLang supports both precisions and `expectation_method="exact"`,
+`"statevector"`, or `"shots"`, with `mps=False`. Noisy/fake-backend, QPU
+execution and resource estimation are not supported. See [TileLang](docs/tilelang.md).
+
+**CUDA-Q requires `simulation=True` and `fakebackend=False`.** Use `ideal=True`
+for the original ideal path, or explicitly select `topology="native"` with
+`ideal=False` for native noiseless simulation. Fake-backend simulation, QPU
+execution, and resource estimation are unsupported and raise clear errors.
 These flags are validated before the legacy Qiskit ideal-mode normalization.
 
 CUDA-Q always uses GPU, even though the shared `use_gpu_statevector` default
@@ -328,7 +422,7 @@ frameworks.
 
 ### Choosing `precision`
 
-All three maps accept the keyword-only option `precision="double"` (FP64,
+All four public map classes accept the keyword-only option `precision="double"` (FP64,
 the default) or `precision="single"` (FP32). This selects the simulator's
 internal floating-point precision, independently of the expectation method.
 
@@ -337,6 +431,7 @@ internal floating-point precision, independently of the expectation method.
 | Qiskit/Aer statevector, CPU or GPU | Supported | Supported |
 | Qiskit/Aer MPS | Unsupported; raises `ValueError` | Supported |
 | CUDA-Q statevector or MPS, GPU | Supported | Supported |
+| TileLang statevector, NVIDIA GPU | Supported | Supported |
 
 For example, after installing CUDA-Q:
 
@@ -450,12 +545,15 @@ All three maps (`XYZProjectiveQFM`, `CDIsingProjectiveQFM`, and
 `HeisenbergProjectiveQFM`) accept the keyword-only option
 `expectation_method="statevector"`. The default remains `"shots"`. CUDA-Q
 additionally accepts `"exact"` for both statevector and MPS.
+TileLang accepts `"exact"`, `"statevector"`, and the shared `"shots"` default
+with FP32 or FP64. Shots use joint Born sampling per compatible measurement
+basis; `shots` is the budget per sample and basis, controlled by `seed`.
 
 | Method | How features are computed | When to use it |
 |---|---|---|
 | `"shots"` | Estimate expectations from finite measurement samples; `shots` controls the sampling budget. | Sampling experiments, noisy simulation, or real hardware. |
 | `"statevector"` | Evolve one full state per sample and compute each expectation directly from it. | Noiseless simulation when the full state fits in memory. |
-| `"exact"` (CUDA-Q only) | Compute expectations without measurement sampling on the selected statevector or MPS target. | Ideal GPU simulation; MPS truncation can still introduce error. |
+| `"exact"` (CUDA-Q or TileLang) | Compute expectations without measurement sampling; TileLang uses full states, CUDA-Q supports full states or MPS. | Noiseless GPU simulation; CUDA-Q MPS truncation can still introduce error. |
 
 `ideal=True` alone does **not** select exact expectations. Set
 `expectation_method="statevector"` explicitly to avoid finite-shot sampling,
@@ -466,7 +564,7 @@ or use `expectation_method="exact"` with CUDA-Q.
 | Configuration | Qiskit `statevector` | CUDA-Q `statevector` |
 |---|---|---|
 | `simulation=True`, `fakebackend=False`, `mps=False`, `ideal=True` | Yes; no hardware credentials needed. | Yes; NVIDIA GPU required. |
-| Same configuration with `ideal=False` | Yes; hardware information/credentials may still be needed for topology and assignment. | Unsupported in this version. |
+| Same configuration with `ideal=False` | Yes; hardware information/credentials may still be needed unless using a snapshot. | Yes with explicit `topology="native"`; NVIDIA GPU required. |
 | `fakebackend=True` | No. | No. |
 | `simulation=False` | No. | No. |
 | `mps=True` | No; this option computes the full vector. | No; use `"exact"` for deterministic MPS expectations. |
@@ -516,8 +614,9 @@ X_quantum_test = pqfm.transform(X_test)
 
 For `framework="qiskit"`, this option works with both `fit/transform` and `run()`. It requires
 `simulation=True`, `fakebackend=False`, and `mps=False`; `ideal` can be either
-value. With `ideal=False`, hardware information is still loaded for the map's
-existing topology/assignment logic, but simulation remains noiseless.
+value. With `ideal=False`, hardware information supplies the map's existing
+topology/assignment logic unless `topology_file` supplies it offline. Simulation
+remains noiseless.
 
 For each sample, Aer evolves one full state vector and all observables reuse
 that vector. The configured CPU/GPU device is used for evolution; observable
@@ -569,11 +668,12 @@ the feature map:
 - `ideal=True`: runs ideal simulation using the selected `framework`. The encoded qubits are treated as
   fully connected when the map allows it, without enforcing a specific IBM QPU
   coupling map.
-- Qiskit only, `ideal=False` and `simulation=True`: simulates the circuit while using the
+- `ideal=False`, `simulation=True`, and `fakebackend=False`: simulates the circuit while using the
   structure of the selected `ibm_qpu`. For example, a Heron r2 backend uses its
   heavy-hex topology, so the available two-qubit terms are limited by the QPU
   coupling map even though execution is simulated. This mode is also useful for
-  MPS simulation with `mps=True`.
+  MPS simulation with `mps=True`. CUDA-Q requires explicit `topology="native"`.
+  A `topology_file` can supply native connectivity offline.
 - Qiskit only, `ideal=False`, `simulation=True`, and `fakebackend=True`: simulates from the
   selected IBM backend model through `AerSimulator.from_backend`, including the
   backend topology and fake-backend behavior.
@@ -770,7 +870,8 @@ one map and calls `run()`, like the other basic examples. It reads
 multi-axis encoding on `x` and `y`, and diagonal plus cross measurements.
 Edit the constructor arguments to select another dataset, encoding or topology.
 For native connectivity, set `ideal=False`, `topology="native"`, and the target
-`ibm_qpu`; retrieving its topology requires configured IBM access.
+`ibm_qpu`; retrieving its topology requires configured IBM access. Alternatively,
+set `topology_file` to a saved graph for offline noiseless simulation.
 
 ```bash
 python examples/heisenberg_topologies.py
@@ -906,11 +1007,13 @@ mode denotes `direct`; QPYs without encoding metadata retain the legacy warning.
 | Qiskit exact CPU statevector | `expectation_method="statevector"`, `mps=False` |
 | Qiskit sampled statevector/MPS | `expectation_method="shots"`, `mps=False/True`; Aer MPS requires double precision |
 | CUDA-Q ideal GPU statevector/MPS | `framework="cudaq"`, `expectation_method="exact"`, `mps=False/True`; supports single/double precision |
+| CUDA-Q native noiseless simulation | `ideal=False`, `topology="native"`, `framework="cudaq"`, `fakebackend=False`; optional offline `topology_file` |
+| TileLang noiseless GPU simulation, including native topology | `framework="tilelang"`, `mps=False`; single/double precision, exact/statevector/shots; optional offline `topology_file` |
 | Qiskit native topology/fakebackend | `ideal=False`, `topology="native"`, `ibm_qpu="ibm_kingston"`; configured IBM access supplies the real topology |
 | Real IBM QPU | `ideal=False`, `simulation=False`, `framework="qiskit"`, `expectation_method="shots"`, then explicit `run()` |
 
 `topology="full"` remains restricted to ideal simulation. CUDA-Q requires an
-accessible NVIDIA GPU and ideal simulation. CUDA-Q `exact` removes shot noise
+accessible NVIDIA GPU and noiseless simulation. CUDA-Q `exact` removes shot noise
 but does not remove MPS truncation. `shots`, `precision`, MPS limits, seeds,
 resource estimation and fixed layouts keep their inherited semantics. No real
 QPU jobs are submitted by the automated tests or the runnable example.

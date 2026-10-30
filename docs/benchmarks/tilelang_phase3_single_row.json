@@ -1,0 +1,1024 @@
+{
+  "gpu": "NVIDIA GeForce RTX 5070",
+  "gpu_total_bytes": 12820480000,
+  "cuda": "13.0",
+  "versions": {
+    "torch": "2.14.0",
+    "tilelang": "0.1.15",
+    "cuda-quantum-cu12": "0.16.0.post1",
+    "qiskit-aer-gpu": "0.15.1",
+    "qiskit-aer": null
+  },
+  "git_head": "b3ca41a37ba900b4fb212c6576f0169ac1f60fad",
+  "source_sha256": {
+    "scripts/benchmark_tilelang.py": "14b2e406a81a519c6cd9191d253efaa336dc331432b1c2fce6afad7763637aa5",
+    "pqfmlib/core/tilelang_execution.py": "51dede4bcf684c6d34747a2ec3418a99b15cfc72cfb0ff9ddc40614dc6c64a73",
+    "pqfmlib/core/tilelang_plan.py": "25730c24917220113f6da6b582075777ddb9e8f1dfed814634684e7222a4cfcd",
+    "pqfmlib/core/_tilelang_kernels.py": "6c8366d9aba0e926ef4f57fe44807c1f71f9a584dda22984e86b542c59ccc25c"
+  },
+  "options": {
+    "qubits": [
+      8
+    ],
+    "steps": [
+      1
+    ],
+    "graphs": [
+      "heavy_hex"
+    ],
+    "topology_file": null,
+    "maps": [
+      "cd-ising",
+      "xyz"
+    ],
+    "engines": [
+      "reference",
+      "full",
+      "auto",
+      "cudaq",
+      "aer_gpu"
+    ],
+    "rows": 1,
+    "train_rows": 64,
+    "blocks": 1,
+    "encoding": "shared_feature",
+    "axes": "xyz",
+    "cross_terms": true,
+    "cross_observables": true,
+    "batch_size": 128,
+    "repeats": 5,
+    "output": "docs/benchmarks/tilelang_phase3_single_row.json"
+  },
+  "results": [
+    {
+      "engine": "reference",
+      "n_samples": 1,
+      "n_parameters": 15,
+      "n_observables": 15,
+      "repeats": 5,
+      "parameter_seconds": 4.58710128441453e-05,
+      "backend_setup_seconds": 3.265897976234555e-05,
+      "cold_execution_seconds": 0.08726198400836438,
+      "execution_seconds": 0.006549354991875589,
+      "execution_samples_seconds": [
+        0.00676021003164351,
+        0.006549354991875589,
+        0.0058831709902733564,
+        0.0062246599700301886,
+        0.006945992005057633
+      ],
+      "parameter_and_execution_seconds": 0.006277179985772818,
+      "rows_per_second": 152.68679148412176,
+      "torch_peak_allocated_bytes": 11264,
+      "max_abs_error_vs_first_engine": 0.0,
+      "max_abs_error_vs_cpu_first_two": 6.522560269672795e-16,
+      "parameter_sha256": "5ba8d6489cd8f7de1e47eb3c9572564e2223cacf8f4b29ce7871c1f8582adbd7",
+      "stats": {
+        "n_samples": 1,
+        "n_observables": 15,
+        "gate_calls": 74,
+        "pauli_calls": 15,
+        "precision": "double",
+        "execution_path": "full_statevector",
+        "expectation_method": "exact",
+        "total_seconds": 0.006240029993932694
+      },
+      "speedup_vs_reference": 1.0,
+      "speedup_vs_cudaq": 0.34886870757432326,
+      "speedup_vs_aer_gpu": 4.803279257327214,
+      "map": "cd-ising",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.8256548630306497,
+      "n_blocks": 1,
+      "encoding": null,
+      "axes": "z",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "full",
+      "n_samples": 1,
+      "n_parameters": 15,
+      "n_observables": 15,
+      "repeats": 5,
+      "parameter_seconds": 4.58710128441453e-05,
+      "backend_setup_seconds": 2.0086998119950294e-05,
+      "cold_execution_seconds": 1.5528460490168072,
+      "execution_seconds": 0.001869983971118927,
+      "execution_samples_seconds": [
+        0.001869983971118927,
+        0.001738605962600559,
+        0.0020601279684342444,
+        0.0013800840242765844,
+        0.0020894670160487294
+      ],
+      "parameter_and_execution_seconds": 0.001683459966443479,
+      "rows_per_second": 534.7639420682511,
+      "torch_peak_allocated_bytes": 12288,
+      "max_abs_error_vs_first_engine": 4.440892098500626e-16,
+      "max_abs_error_vs_cpu_first_two": 5.551115123125783e-16,
+      "parameter_sha256": "5ba8d6489cd8f7de1e47eb3c9572564e2223cacf8f4b29ce7871c1f8582adbd7",
+      "stats": {
+        "n_samples": 1,
+        "n_observables": 15,
+        "gate_calls": 10,
+        "pauli_calls": 1,
+        "precision": "double",
+        "execution_path": "batched_full",
+        "expectation_method": "exact",
+        "compile_seconds": 0.0,
+        "source_qubits": 8,
+        "max_cone_qubits": 8,
+        "n_cones": 1,
+        "n_batches": 1,
+        "source_gate_count": 74,
+        "fused_gate_count": 10,
+        "distinct_matrix_count": 10,
+        "simulated_amplitudes_per_row": 256,
+        "estimated_work_per_row": 6400,
+        "reference_work_per_row": 6400,
+        "matrix_seconds": 0.0006229830323718488,
+        "profiled": true,
+        "batch_size": 1,
+        "estimated_buffer_bytes": 11776,
+        "host_to_device_seconds": 0.00016084499657154083,
+        "evolution_seconds": 0.00017578201368451118,
+        "reduction_seconds": 5.187798524275422e-05,
+        "device_to_host_seconds": 7.492100121453404e-05,
+        "total_seconds": 0.0014301429619081318
+      },
+      "speedup_vs_reference": 3.5023588934597685,
+      "speedup_vs_cudaq": 1.2218634206227463,
+      "speedup_vs_aer_gpu": 16.822807824670797,
+      "map": "cd-ising",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.8256548630306497,
+      "n_blocks": 1,
+      "encoding": null,
+      "axes": "z",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "auto",
+      "n_samples": 1,
+      "n_parameters": 15,
+      "n_observables": 15,
+      "repeats": 5,
+      "parameter_seconds": 4.58710128441453e-05,
+      "backend_setup_seconds": 1.7677026335150003e-05,
+      "cold_execution_seconds": 0.008539817994460464,
+      "execution_seconds": 0.0015152079868130386,
+      "execution_samples_seconds": [
+        0.0016008220263756812,
+        0.0015343559789471328,
+        0.0014477330259978771,
+        0.0015109889791347086,
+        0.0015152079868130386
+      ],
+      "parameter_and_execution_seconds": 0.0016196659998968244,
+      "rows_per_second": 659.9754018610449,
+      "torch_peak_allocated_bytes": 12288,
+      "max_abs_error_vs_first_engine": 4.440892098500626e-16,
+      "max_abs_error_vs_cpu_first_two": 5.551115123125783e-16,
+      "parameter_sha256": "5ba8d6489cd8f7de1e47eb3c9572564e2223cacf8f4b29ce7871c1f8582adbd7",
+      "stats": {
+        "n_samples": 1,
+        "n_observables": 15,
+        "gate_calls": 10,
+        "pauli_calls": 1,
+        "precision": "double",
+        "execution_path": "batched_full",
+        "expectation_method": "exact",
+        "compile_seconds": 0.0,
+        "source_qubits": 8,
+        "max_cone_qubits": 8,
+        "n_cones": 1,
+        "n_batches": 1,
+        "source_gate_count": 74,
+        "fused_gate_count": 10,
+        "distinct_matrix_count": 10,
+        "simulated_amplitudes_per_row": 256,
+        "estimated_work_per_row": 6400,
+        "reference_work_per_row": 6400,
+        "matrix_seconds": 0.0006415199604816735,
+        "profiled": true,
+        "batch_size": 1,
+        "estimated_buffer_bytes": 11776,
+        "host_to_device_seconds": 0.00016348203644156456,
+        "evolution_seconds": 0.00017961696721613407,
+        "reduction_seconds": 6.46929838694632e-05,
+        "device_to_host_seconds": 6.66279811412096e-05,
+        "total_seconds": 0.0015052109956741333
+      },
+      "speedup_vs_reference": 4.322413192693732,
+      "speedup_vs_cudaq": 1.5079547041372667,
+      "speedup_vs_aer_gpu": 20.7617576300633,
+      "map": "cd-ising",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.8256548630306497,
+      "n_blocks": 1,
+      "encoding": null,
+      "axes": "z",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "cudaq",
+      "n_samples": 1,
+      "n_parameters": 15,
+      "n_observables": 15,
+      "repeats": 5,
+      "parameter_seconds": 4.58710128441453e-05,
+      "backend_setup_seconds": 0.07403847097884864,
+      "cold_execution_seconds": 0.1489551549893804,
+      "execution_seconds": 0.002284865011461079,
+      "execution_samples_seconds": [
+        0.002963260980322957,
+        0.002284865011461079,
+        0.002654783020261675,
+        0.0022686870070174336,
+        0.002199056965764612
+      ],
+      "parameter_and_execution_seconds": 0.0023384210071526468,
+      "rows_per_second": 437.66261682152515,
+      "torch_peak_allocated_bytes": null,
+      "max_abs_error_vs_first_engine": 4.996003610813204e-16,
+      "max_abs_error_vs_cpu_first_two": 7.563394355258879e-16,
+      "parameter_sha256": "5ba8d6489cd8f7de1e47eb3c9572564e2223cacf8f4b29ce7871c1f8582adbd7",
+      "stats": {
+        "n_samples": 1,
+        "observe_calls": 1,
+        "get_state_calls": 0,
+        "precision": "double",
+        "sample_calls": 0,
+        "sample_seconds": 0.0,
+        "n_measurement_groups": 0,
+        "n_observables": 15,
+        "shots": null,
+        "expectation_method": "exact",
+        "mps_effective_max_bond": null,
+        "binding_seconds": 0.0001010510022751987,
+        "observe_seconds": 0.0016525929677300155,
+        "state_seconds": 0.0,
+        "execution_path": "statevector",
+        "n_distinct_pauli_terms": 15,
+        "state_kernel_initializations": 0,
+        "compile_seconds": 8.33999365568161e-07,
+        "total_seconds": 0.002120024000760168
+      },
+      "speedup_vs_reference": 2.866407844237389,
+      "speedup_vs_cudaq": 1.0,
+      "speedup_vs_aer_gpu": 13.768157341265464,
+      "map": "cd-ising",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.8256548630306497,
+      "n_blocks": 1,
+      "encoding": null,
+      "axes": "z",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "aer_gpu",
+      "n_samples": 1,
+      "n_parameters": 15,
+      "n_observables": 15,
+      "repeats": 5,
+      "parameter_seconds": 4.58710128441453e-05,
+      "backend_setup_seconds": 0.00013149500591680408,
+      "cold_execution_seconds": 0.051797699998132885,
+      "execution_seconds": 0.031458380981348455,
+      "execution_samples_seconds": [
+        0.032596419972833246,
+        0.030707494996022433,
+        0.029346184979658574,
+        0.031458380981348455,
+        0.03684126504231244
+      ],
+      "parameter_and_execution_seconds": 0.03148271201644093,
+      "rows_per_second": 31.788031322810156,
+      "torch_peak_allocated_bytes": null,
+      "max_abs_error_vs_first_engine": 5.689893001203927e-16,
+      "max_abs_error_vs_cpu_first_two": 3.3306690738754696e-16,
+      "parameter_sha256": "5ba8d6489cd8f7de1e47eb3c9572564e2223cacf8f4b29ce7871c1f8582adbd7",
+      "stats": null,
+      "speedup_vs_reference": 0.20819110162594429,
+      "speedup_vs_cudaq": 0.07263136055271777,
+      "speedup_vs_aer_gpu": 1.0,
+      "map": "cd-ising",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.8256548630306497,
+      "n_blocks": 1,
+      "encoding": null,
+      "axes": "z",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "reference",
+      "n_samples": 1,
+      "n_parameters": 87,
+      "n_observables": 87,
+      "repeats": 5,
+      "parameter_seconds": 2.487696474418044e-05,
+      "backend_setup_seconds": 3.137299790978432e-05,
+      "cold_execution_seconds": 0.0402639769599773,
+      "execution_seconds": 0.02441774494946003,
+      "execution_samples_seconds": [
+        0.0238236750010401,
+        0.024296674004290253,
+        0.02441774494946003,
+        0.030036550015211105,
+        0.025783714023418725
+      ],
+      "parameter_and_execution_seconds": 0.02494958200259134,
+      "rows_per_second": 40.9538228067254,
+      "torch_peak_allocated_bytes": 11264,
+      "max_abs_error_vs_first_engine": 0.0,
+      "max_abs_error_vs_cpu_first_two": 7.771561172376096e-16,
+      "parameter_sha256": "43c40bf06eee11455ceb304365a8a93158dceae479ae1f89761e21cc2919a39a",
+      "stats": {
+        "n_samples": 1,
+        "n_observables": 87,
+        "gate_calls": 295,
+        "pauli_calls": 87,
+        "precision": "double",
+        "execution_path": "full_statevector",
+        "expectation_method": "exact",
+        "total_seconds": 0.02302273496752605
+      },
+      "speedup_vs_reference": 1.0,
+      "speedup_vs_cudaq": 0.22806385461879108,
+      "speedup_vs_aer_gpu": 1.5208594449712594,
+      "map": "xyz",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.1392956980271265,
+      "n_blocks": 1,
+      "encoding": "shared_feature",
+      "axes": "xyz",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "full",
+      "n_samples": 1,
+      "n_parameters": 87,
+      "n_observables": 87,
+      "repeats": 5,
+      "parameter_seconds": 2.487696474418044e-05,
+      "backend_setup_seconds": 2.102198777720332e-05,
+      "cold_execution_seconds": 2.9306875549955294,
+      "execution_seconds": 0.004485979967284948,
+      "execution_samples_seconds": [
+        0.005017251998651773,
+        0.004485979967284948,
+        0.004426172992680222,
+        0.004374483018182218,
+        0.004535040003247559
+      ],
+      "parameter_and_execution_seconds": 0.004495806992053986,
+      "rows_per_second": 222.91673330971886,
+      "torch_peak_allocated_bytes": 29184,
+      "max_abs_error_vs_first_engine": 2.886579864025407e-15,
+      "max_abs_error_vs_cpu_first_two": 2.275957200481571e-15,
+      "parameter_sha256": "43c40bf06eee11455ceb304365a8a93158dceae479ae1f89761e21cc2919a39a",
+      "stats": {
+        "n_samples": 1,
+        "n_observables": 87,
+        "gate_calls": 71,
+        "pauli_calls": 2,
+        "precision": "double",
+        "execution_path": "batched_full",
+        "expectation_method": "exact",
+        "compile_seconds": 0.0,
+        "source_qubits": 8,
+        "max_cone_qubits": 8,
+        "n_cones": 1,
+        "n_batches": 1,
+        "source_gate_count": 295,
+        "fused_gate_count": 71,
+        "distinct_matrix_count": 69,
+        "simulated_amplitudes_per_row": 256,
+        "estimated_work_per_row": 40448,
+        "reference_work_per_row": 40448,
+        "matrix_seconds": 0.0024857359821908176,
+        "profiled": true,
+        "batch_size": 1,
+        "estimated_buffer_bytes": 26880,
+        "host_to_device_seconds": 0.0003680810914374888,
+        "evolution_seconds": 0.0007685370510444045,
+        "reduction_seconds": 0.00010818603914231062,
+        "device_to_host_seconds": 0.00014714396093040705,
+        "total_seconds": 0.004586480965372175
+      },
+      "speedup_vs_reference": 5.443123938923516,
+      "speedup_vs_cudaq": 1.2413798266787144,
+      "speedup_vs_aer_gpu": 8.278226452660993,
+      "map": "xyz",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.1392956980271265,
+      "n_blocks": 1,
+      "encoding": "shared_feature",
+      "axes": "xyz",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "auto",
+      "n_samples": 1,
+      "n_parameters": 87,
+      "n_observables": 87,
+      "repeats": 5,
+      "parameter_seconds": 2.487696474418044e-05,
+      "backend_setup_seconds": 1.719599822536111e-05,
+      "cold_execution_seconds": 0.020792781957425177,
+      "execution_seconds": 0.0047884859959594905,
+      "execution_samples_seconds": [
+        0.004916912992484868,
+        0.004703625978436321,
+        0.004906347021460533,
+        0.004637229023501277,
+        0.0047884859959594905
+      ],
+      "parameter_and_execution_seconds": 0.0045246119843795896,
+      "rows_per_second": 208.83427472562244,
+      "torch_peak_allocated_bytes": 29184,
+      "max_abs_error_vs_first_engine": 2.886579864025407e-15,
+      "max_abs_error_vs_cpu_first_two": 2.275957200481571e-15,
+      "parameter_sha256": "43c40bf06eee11455ceb304365a8a93158dceae479ae1f89761e21cc2919a39a",
+      "stats": {
+        "n_samples": 1,
+        "n_observables": 87,
+        "gate_calls": 71,
+        "pauli_calls": 2,
+        "precision": "double",
+        "execution_path": "batched_full",
+        "expectation_method": "exact",
+        "compile_seconds": 0.0,
+        "source_qubits": 8,
+        "max_cone_qubits": 8,
+        "n_cones": 1,
+        "n_batches": 1,
+        "source_gate_count": 295,
+        "fused_gate_count": 71,
+        "distinct_matrix_count": 69,
+        "simulated_amplitudes_per_row": 256,
+        "estimated_work_per_row": 40448,
+        "reference_work_per_row": 40448,
+        "matrix_seconds": 0.002571874007117003,
+        "profiled": true,
+        "batch_size": 1,
+        "estimated_buffer_bytes": 26880,
+        "host_to_device_seconds": 0.00041917903581634164,
+        "evolution_seconds": 0.0007571809692308307,
+        "reduction_seconds": 0.0001311739906668663,
+        "device_to_host_seconds": 0.00013125600526109338,
+        "total_seconds": 0.004808637022506446
+      },
+      "speedup_vs_reference": 5.099262056955715,
+      "speedup_vs_cudaq": 1.162957360420666,
+      "speedup_vs_aer_gpu": 7.755260861704672,
+      "map": "xyz",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.1392956980271265,
+      "n_blocks": 1,
+      "encoding": "shared_feature",
+      "axes": "xyz",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "cudaq",
+      "n_samples": 1,
+      "n_parameters": 87,
+      "n_observables": 87,
+      "repeats": 5,
+      "parameter_seconds": 2.487696474418044e-05,
+      "backend_setup_seconds": 2.8058013413101435e-05,
+      "cold_execution_seconds": 0.12749529298162088,
+      "execution_seconds": 0.005568805034272373,
+      "execution_samples_seconds": [
+        0.006587465002667159,
+        0.005568805034272373,
+        0.00519885600078851,
+        0.00576182798249647,
+        0.005371532985009253
+      ],
+      "parameter_and_execution_seconds": 0.005959743983112276,
+      "rows_per_second": 179.57173825365595,
+      "torch_peak_allocated_bytes": null,
+      "max_abs_error_vs_first_engine": 2.7200464103316335e-15,
+      "max_abs_error_vs_cpu_first_two": 3.3306690738754696e-15,
+      "parameter_sha256": "43c40bf06eee11455ceb304365a8a93158dceae479ae1f89761e21cc2919a39a",
+      "stats": {
+        "n_samples": 1,
+        "observe_calls": 1,
+        "get_state_calls": 0,
+        "precision": "double",
+        "sample_calls": 0,
+        "sample_seconds": 0.0,
+        "n_measurement_groups": 0,
+        "n_observables": 87,
+        "shots": null,
+        "expectation_method": "exact",
+        "mps_effective_max_bond": null,
+        "binding_seconds": 0.00035842700162902474,
+        "observe_seconds": 0.004448209947440773,
+        "state_seconds": 0.0,
+        "execution_path": "statevector",
+        "n_distinct_pauli_terms": 87,
+        "state_kernel_initializations": 0,
+        "compile_seconds": 9.460491128265858e-07,
+        "total_seconds": 0.005316033028066158
+      },
+      "speedup_vs_reference": 4.384736904808966,
+      "speedup_vs_cudaq": 1.0,
+      "speedup_vs_aer_gpu": 6.668568535392762,
+      "map": "xyz",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.1392956980271265,
+      "n_blocks": 1,
+      "encoding": "shared_feature",
+      "axes": "xyz",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    },
+    {
+      "engine": "aer_gpu",
+      "n_samples": 1,
+      "n_parameters": 87,
+      "n_observables": 87,
+      "repeats": 5,
+      "parameter_seconds": 2.487696474418044e-05,
+      "backend_setup_seconds": 0.00011320901103317738,
+      "cold_execution_seconds": 0.04183917597401887,
+      "execution_seconds": 0.037135958031285554,
+      "execution_samples_seconds": [
+        0.03622958099003881,
+        0.037479557970073074,
+        0.0364194720168598,
+        0.037135958031285554,
+        0.04040091298520565
+      ],
+      "parameter_and_execution_seconds": 0.037359839014243335,
+      "rows_per_second": 26.92807868744197,
+      "torch_peak_allocated_bytes": null,
+      "max_abs_error_vs_first_engine": 5.273559366969494e-16,
+      "max_abs_error_vs_cpu_first_two": 9.992007221626409e-16,
+      "parameter_sha256": "43c40bf06eee11455ceb304365a8a93158dceae479ae1f89761e21cc2919a39a",
+      "stats": null,
+      "speedup_vs_reference": 0.6575229573689484,
+      "speedup_vs_cudaq": 0.14995722015790944,
+      "speedup_vs_aer_gpu": 1.0,
+      "map": "xyz",
+      "graph": "heavy_hex",
+      "qubits": 8,
+      "steps": 1,
+      "fit_seconds": 0.1392956980271265,
+      "n_blocks": 1,
+      "encoding": "shared_feature",
+      "axes": "xyz",
+      "n_edges": 7,
+      "phys_nodes": [
+        0,
+        1,
+        2,
+        3,
+        9,
+        10,
+        13,
+        14
+      ],
+      "logical_edges": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          1,
+          6
+        ],
+        [
+          1,
+          7
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "input_sha256": "3e63e84306ff071580f531476e2dfcfdfe3d48ea569b24a41d351269cde818db",
+      "train_sha256": "8bc245c5a3c096c7e5edfa06374930e6af46eb735a9a7fb97f440907e4956c63",
+      "topology_sha256": "99f3c46e093f6b7f56ce80e71f8fc7618e3c8a14cd3b329e40dbacc8e83ca0c3"
+    }
+  ]
+}

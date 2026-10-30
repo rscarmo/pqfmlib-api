@@ -14,6 +14,7 @@ htmlcov/
 # Environments and local configuration
 .venv/
 .venv_gpu/
+.venv_tilelang/
 venv/
 env/
 .env
@@ -23,6 +24,9 @@ env/
 outputs/
 tests/*
 !tests/test_heisenberg_topology.py
+!tests/test_native_simulation.py
+!tests/test_tilelang_execution.py
+!tests/test_tilelang_sampling.py
 !tests/test_heisenberg_fixed_circuits.py
 !tests/test_superexchange.py
 !tests/test_heisenberg_all_pairs.py

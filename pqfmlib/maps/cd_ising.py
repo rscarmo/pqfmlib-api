@@ -28,6 +28,7 @@ from pqfmlib.hardware import feature_assignment as GA
 from pqfmlib.hardware.coupling import get_coupling_edges_and_costs
 from pqfmlib.hardware.feature_assignment import pick_connected_subset_greedy
 from pqfmlib.hardware.layout import edges_log_from_phys_nodes, validate_phys_nodes
+from pqfmlib.hardware.topology import load_topology_snapshot
 from pqfmlib.maps.xyz import build_blocks_edge_first
 from pqfmlib.utils.io import load_json, save_json
 
@@ -243,6 +244,8 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
         """Return configuration that must remain unchanged after fit."""
         return (
             "CDIsingProjectiveQFM",
+            self.topology,
+            str(self.topology_file),
             int(self.seed),
             bool(self.simulation),
             bool(self.fakebackend),
@@ -328,6 +331,9 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
         else:
             obs_list, pairs_2q = z_observables_edges(self.q_enc, self.edges_act)
         obs_metadata = [("z", i) for i in range(self.q_enc)] + [("zz", i, j) for i, j in pairs_2q]
+        if self.measure_all_zz:
+            for k in range(3, self.k_max + 1):
+                obs_metadata.extend(("z" * k, *sites) for sites in combinations(range(self.q_enc), k))
         return qc_param, param_order, obs_list, obs_metadata, pairs_2q
 
     def _prepare_fitted_execution(self) -> None:
@@ -413,6 +419,8 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
                 parts.append("fakebackend" if self.fakebackend else "simulacao")
                 if self.measure_all_zz:
                     parts.append("ZZAll")
+        if self.topology == "native":
+            parts.append("native")
         self.ensure_output_folder("_".join(parts))
 
     def compute_global_J_and_feature_blocks(self) -> None:
@@ -422,6 +430,7 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
         self.blocks_feat = build_blocks_edge_first(self.J, q_enc=self.q_enc, remaining_policy="remove_features")
 
     def prepare_blocks_and_edges(self, *, persist_artifacts: bool = True) -> None:
+        self._validate_topology_configuration()
         if self.ideal:
             self.phys_nodes = list(range(self.q_enc))
             self.edges_log = [(i, j) for i in range(self.q_enc) for j in range(i + 1, self.q_enc)]
@@ -445,8 +454,11 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
                 save_json(blocks_to_jsonable(self.blocks), Path(self.base_folder) / "blocks.json")
             return
 
-        self._load_real_backend()
-        coupling_edges, edge_cost = get_coupling_edges_and_costs(self.real_backend)
+        if self.topology_file:
+            coupling_edges, edge_cost = load_topology_snapshot(self.topology_file)
+        else:
+            self._load_real_backend()
+            coupling_edges, edge_cost = get_coupling_edges_and_costs(self.real_backend)
         if self.use_fixed_phys_nodes:
             self.phys_nodes = load_json(self.fixed_phys_nodes_file)
         else:
@@ -527,7 +539,12 @@ class CDIsingProjectiveQFM(BaseProjectiveQFM):
         n1 = self.q_enc
         q1_names = [f"q1_z_{i}" for i in range(n1)]
         q2_names = [f"q2_z_{i}_{j}" for i, j in self.pairs_2q] if n_q_feats > n1 else []
-        df_q_all = pd.DataFrame(self.Xq_all_raw, columns=q1_names + q2_names)
+        higher_names = []
+        if self.measure_all_zz:
+            higher_names = [f"q{k}_z_" + "_".join(map(str, sites))
+                            for k in range(3, self.k_max + 1)
+                            for sites in combinations(range(self.q_enc), k)]
+        df_q_all = pd.DataFrame(self.Xq_all_raw, columns=q1_names + q2_names + higher_names)
         df_q_all["y"] = self.y
         self.csv_output_path = str(Path(self.base_folder) / f"qfeatures_all_{self.name_file}.csv")
         self.npy_output_path = str(Path(self.base_folder) / f"qfeatures_all_{self.name_file}.npy")

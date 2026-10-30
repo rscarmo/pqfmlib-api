@@ -8,6 +8,22 @@ from typing import Iterable
 from qiskit.quantum_info import SparsePauliOp
 
 
+def group_paulis_qubitwise(labels):
+    """Stable greedy measurement bases with qubit-wise compatible Pauli words."""
+    groups = []
+    for index, label in enumerate(labels):
+        for basis, members in groups:
+            if all(a == "I" or b == "I" or a == b for a, b in zip(basis, label)):
+                for q, axis in enumerate(label):
+                    if axis != "I":
+                        basis[q] = axis
+                members.append(index)
+                break
+        else:
+            groups.append((list(label), [index]))
+    return [("".join(basis), tuple(members)) for basis, members in groups]
+
+
 def pauli_string(n: int, terms) -> str:
     """Return a Qiskit Pauli label from logical pairs (qubit index, axis)."""
     p = ["I"] * int(n)

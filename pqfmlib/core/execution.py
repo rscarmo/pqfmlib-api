@@ -13,7 +13,7 @@ from qiskit_aer import AerSimulator
 from qiskit.transpiler import Layout
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
-from pqfmlib.core.framework import validate_framework
+from pqfmlib.core.framework import validate_framework, validate_shots
 from pqfmlib.core.resources import test_circuit_t
 from pqfmlib.core.serialization import metadata_to_jsonable
 from pqfmlib.utils.io import save_circuit_draw
@@ -233,6 +233,16 @@ def execute_prepared_projected_feature_job(
     theta_values_all = np.asarray(theta_values_all)
     if theta_values_all.ndim != 2:
         raise ValueError("theta_values_all must be a 2D matrix.")
+    if framework == "tilelang":
+        if not simulation or resource_estimation or expectation_method not in ("exact", "statevector", "shots"):
+            raise ValueError("TileLang requires simulation without resource estimation and a supported expectation_method.")
+        if expectation_method == "shots":
+            validate_shots(shots)
+        from pqfmlib.core.tilelang_execution import TileLangExecutor
+
+        if not isinstance(backend, TileLangExecutor):
+            raise ValueError("framework='tilelang' requires a TileLangExecutor backend.")
+        return backend.execute(prepared, theta_values_all, expectation_method=expectation_method, shots=shots)
     if framework == "cudaq":
         if not simulation or resource_estimation:
             raise ValueError("CUDA-Q execution requires simulation=True and resource_estimation=False.")
@@ -311,6 +321,12 @@ def run_projected_feature_job(
 ):
     """Run or submit a projected feature-map Estimator job."""
     validate_framework(framework)
+    if framework == "tilelang" and (
+        not simulation or fakebackend or resource_estimation or expectation_method not in ("exact", "statevector", "shots")
+    ):
+        raise ValueError("TileLang requires noiseless simulation without resource estimation and a supported expectation_method.")
+    if framework == "tilelang" and expectation_method == "shots":
+        validate_shots(shots)
     if framework == "cudaq" and (not simulation or fakebackend or resource_estimation):
         raise ValueError("CUDA-Q requires simulation=True, fakebackend=False and resource_estimation=False.")
     if np.asarray(theta_values_all).ndim != 2:

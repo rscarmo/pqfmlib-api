@@ -36,6 +36,7 @@ from pqfmlib.hardware import feature_assignment as GA
 from pqfmlib.hardware.coupling import get_coupling_edges_and_costs
 from pqfmlib.hardware.feature_assignment import pick_connected_subset_greedy
 from pqfmlib.hardware.layout import edges_log_from_phys_nodes, validate_phys_nodes
+from pqfmlib.hardware.topology import load_topology_snapshot
 from pqfmlib.utils.io import load_json, save_json
 
 AXES_ALL = ("x", "y", "z")
@@ -474,6 +475,8 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
         """Return configuration that must remain unchanged after fit."""
         return (
             "XYZProjectiveQFM",
+            self.topology,
+            str(self.topology_file),
             int(self.seed),
             bool(self.simulation),
             bool(self.fakebackend),
@@ -667,6 +670,8 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
                     parts.append("All2Q")
         if self.measure_cross_observables:
             parts.append("CrossObs")
+        if self.topology == "native":
+            parts.append("native")
         if self.keep_cross_terms:
             parts.append("cross")
         elif self.keep_diagonal_terms:
@@ -718,6 +723,7 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
                 raise ValueError(f"blocks.json does not cover all dataset features. Missing examples: {missing[:10]}")
 
     def prepare_blocks_and_edges(self, *, persist_artifacts: bool = True) -> None:
+        self._validate_topology_configuration()
         if self.ideal:
             self.phys_nodes = list(range(self.q_enc))
             self.edges_log = [(i, j) for i in range(self.q_enc) for j in range(i + 1, self.q_enc)]
@@ -748,8 +754,11 @@ class XYZProjectiveQFM(BaseProjectiveQFM):
                 save_json(blocks_to_jsonable(self.blocks), Path(self.base_folder) / "blocks.json")
             return
 
-        self._load_real_backend()
-        coupling_edges, edge_cost = get_coupling_edges_and_costs(self.real_backend)
+        if self.topology_file:
+            coupling_edges, edge_cost = load_topology_snapshot(self.topology_file)
+        else:
+            self._load_real_backend()
+            coupling_edges, edge_cost = get_coupling_edges_and_costs(self.real_backend)
         if self.use_fixed_phys_nodes:
             self.phys_nodes = load_json(self.fixed_phys_nodes_file)
         else:

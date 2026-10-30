@@ -30,6 +30,7 @@ from pqfmlib.core.serialization import metadata_to_column_name
 from pqfmlib.hardware.coupling import get_coupling_edges_and_costs
 from pqfmlib.hardware.feature_assignment import pick_connected_subset_greedy
 from pqfmlib.hardware.layout import edges_log_from_phys_nodes, validate_phys_nodes
+from pqfmlib.hardware.topology import load_topology_snapshot
 from pqfmlib.utils.io import load_json, save_circuit_draw, save_json
 
 
@@ -453,6 +454,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
         return (
             "HeisenbergProjectiveQFM",
             self.topology,
+            str(self.topology_file),
             tuple(self.interaction_axes),
             self.encoding_mode,
             self.coupling_mode,
@@ -632,7 +634,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
         self.ensure_output_folder("_".join(parts))
 
     def prepare_layout(self) -> None:
-        self._validate_topology()
+        self._validate_topology_configuration()
         self._validate_encoding()
         self._fixed_circuit = None
         saved_nodes = None
@@ -646,9 +648,13 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             self.phys_nodes = list(range(self.q_enc))
             return
 
-        self._load_real_backend()
+        if not self.topology_file:
+            self._load_real_backend()
         if self.topology == "native":
-            coupling_edges, edge_cost = get_coupling_edges_and_costs(self.real_backend)
+            if self.topology_file:
+                coupling_edges, edge_cost = load_topology_snapshot(self.topology_file)
+            else:
+                coupling_edges, edge_cost = get_coupling_edges_and_costs(self.real_backend)
             self.phys_nodes = (
                 load_json(self.fixed_phys_nodes_file) if self.use_fixed_phys_nodes
                 else saved_nodes if saved_nodes is not None
@@ -765,7 +771,7 @@ class HeisenbergProjectiveQFM(BaseProjectiveQFM):
             extracted = _extract_initial_phys_nodes(qc_t, source)
             if extracted is not None:
                 self.phys_nodes = extracted
-        elif self.fixed_circuit_file_name or self.framework == "cudaq":
+        elif self.fixed_circuit_file_name or self.framework in ("cudaq", "tilelang"):
             qc_t = source.copy()
         else:
             pm = generate_preset_pass_manager(

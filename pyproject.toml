@@ -21,6 +21,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+tilelang = [
+  "torch>=2.5",
+  "tilelang>=0.1.15,<0.1.16",
+]
 cudaq = [
   "cuda-quantum-cu12>=0.16,<0.17",
 ]

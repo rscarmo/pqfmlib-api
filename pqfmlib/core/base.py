@@ -14,7 +14,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from pqfmlib.core.backend import load_ibm_backend, make_aer_backend, make_estimator
 from pqfmlib.core.data import load_tabular_dataset
 from pqfmlib.core.framework import (
-    validate_framework_configuration, validate_precision, validate_aer_precision,
+    validate_framework_configuration, validate_precision, validate_aer_precision, validate_shots,
 )
 
 
@@ -34,6 +34,8 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
     framework: str = field(default="qiskit", kw_only=True)
     precision: str = field(default="double", kw_only=True)
     expectation_method: str = field(default="shots", kw_only=True)
+    topology: str = field(default="auto", kw_only=True)
+    topology_file: str = field(default="", kw_only=True)
     shots: int = 4096
     ibm_qpu: str = "ibm_fez"
     q_enc: int = 20
@@ -61,6 +63,7 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
         return type(self)(**self.get_params(deep=False))
 
     def __post_init__(self) -> None:
+        self._validate_topology_configuration()
         self._validate_framework()
         self._validate_expectation_method()
         self._validate_resource_estimation_mode()
@@ -147,15 +150,44 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
             raise ValueError("DataFrame columns must match the names and order used during fit.")
         return values
 
+    def _validate_topology(self) -> None:
+        if self.topology not in ("auto", "full", "native"):
+            raise ValueError("topology must be 'auto', 'full', or 'native'.")
+        if self.topology == "full" and not self.ideal:
+            raise ValueError("topology='full' requires ideal=True.")
+        if self.topology == "native" and self.ideal:
+            raise ValueError("topology='native' requires ideal=False; ideal=True uses full connectivity.")
+
+    def _validate_topology_configuration(self) -> None:
+        self._validate_topology()
+        if self.topology_file and (
+            self.topology != "native" or self.ideal or not self.simulation or self.fakebackend
+        ):
+            raise ValueError(
+                "topology_file requires topology='native', ideal=False, "
+                "simulation=True and fakebackend=False."
+            )
+
     def _validate_framework(self) -> None:
         validate_framework_configuration(
             self.framework,
             simulation=self.simulation,
             ideal=self.ideal,
             fakebackend=self.fakebackend,
+            native_topology=self.topology == "native",
         )
 
     def _validate_expectation_method(self) -> None:
+        if self.framework == "tilelang":
+            if self.expectation_method not in ("exact", "statevector", "shots"):
+                raise ValueError("TileLang expectation_method must be 'exact', 'statevector' or 'shots'.")
+            if self.expectation_method == "shots":
+                validate_shots(self.shots)
+            if self.mps:
+                raise ValueError("TileLang requires mps=False (full statevector).")
+            if self.statevector_device not in (None, "GPU"):
+                raise ValueError("TileLang requires a GPU; statevector_device must be None or 'GPU'.")
+            return
         if self.framework == "cudaq" and self.expectation_method == "exact":
             return
         if self.expectation_method not in ("shots", "statevector"):
@@ -180,6 +212,8 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
     def _validate_resource_estimation_mode(self) -> None:
         if self.ideal and bool(getattr(self, "resource_estimation", False)):
             raise ValueError("resource_estimation=True is invalid when ideal=True; ideal simulations do not use QPU resources.")
+        if self.framework in ("cudaq", "tilelang") and bool(getattr(self, "resource_estimation", False)):
+            raise ValueError(f"resource_estimation=True is invalid for {self.framework} simulation.")
 
     def load_data(self) -> None:
         self.df_full, self.X, self.y = load_tabular_dataset(self.name_file, self.data_dir)
@@ -187,10 +221,17 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
         self.num_features = int(self.X.shape[1])
 
     def setup_backend_and_estimator(self) -> None:
+        self._validate_topology_configuration()
         self._validate_framework()
         self._validate_precision()
         self._validate_expectation_method()
         self._validate_resource_estimation_mode()
+        if self.framework == "tilelang":
+            from pqfmlib.core.tilelang_execution import TileLangExecutor
+
+            self.backend = TileLangExecutor(precision=self.precision, seed=self.seed)
+            self.estimator = None
+            return
         if self.framework == "cudaq":
             from pqfmlib.core.cudaq_execution import CudaqExecutor
 
@@ -205,7 +246,7 @@ class BaseProjectiveQFM(TransformerMixin, BaseEstimator):
             )
             self.estimator = None
             return
-        if self.ideal:
+        if self.ideal or self.topology_file:
             self.backend = self._make_aer_backend()
             self._set_aer_max_qubits()
         else:
